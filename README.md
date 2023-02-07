@@ -11,6 +11,8 @@ For a learning task, Gaussian process (GP) is interested in learning the statist
 
 The model is implemented based on [GPflow 1.3.0](https://github.com/GPflow/GPflow) and tested using Tensorflow 1.15.0. 
 
+I also had to install scikit-learn v0.20.3 and tensorflow-probability v0.7.0. This would not work using an anaconda environment, and I had to use a venv and pip. 
+
 The demos of three scalable modulated GPs (SHGP, SMGP and SLGP) on three toy cases with heteroscedastic noise, step and multi-modal behaviors are provided. The readers can run the demo files as
 
 ```

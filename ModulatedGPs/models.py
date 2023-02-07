@@ -27,6 +27,8 @@ class SGP:
         self.likelihood = BroadcastingLikelihood(likelihood)
         self.pred_layer = pred_layer
 
+    # In the categorical one the shape of X is (?,) and S = 10
+    # When you use the original placeholder variables, the shape of X is (?, 1)
     def integrate(self, X, S=1): 
         return tf.tile(X[None, :, :], [S,1,1]), None 
 
@@ -115,6 +117,7 @@ class SMGP(SGP):
         # Expectation of lik
         L = tf.reduce_mean(self.E_log_p_Y(Xt, Y, W_SND))
         # ELBO
+        # KL Divergence
         return L - (self.pred_layer.KL() + self.assign_layer.KL()) / self.num_data 
     
     def predict_assign(self, Xnew, S=1):
