@@ -78,7 +78,7 @@ elif func == 'dataAssoc':
     Ytrain = np.concatenate((Ytrain1, Ytrain2))
 
     Xtest = np.linspace(-6, 6, Ns)[:, None]
-elif func == "categorical":
+elif func == 'categorical':
     N, Ns, lambda_ = 600, 100, .1
 
     Xtrain = np.random.uniform(low=-6., high=6., size=(N, 1))
@@ -97,6 +97,28 @@ elif func == "categorical":
     Ytrain = label_encoder.fit_transform(Ytrain.ravel()).reshape(-1, 1)
 
     Xtest = np.linspace(-6, 6, Ns)[:, None]
+elif func == 'multiModal':
+    N, Ns = 3000, 500
+
+    epsilon = np.random.normal(0, 0.005, (N, 1))
+
+    Xtrain = np.random.uniform(low=-2*np.pi, high=2*np.pi, size=(N, 1))
+
+    # Ytrain1 = np.sin(Xtrain) + epsilon
+    # Ytrain2 = np.sin(Xtrain) - 2 * np.exp(-0.5 * pow(Xtrain - 2, 2)) + epsilon
+    # Ytrain3 = -1 - (3/8) * np.pi * Xtrain + (3/10) * np.sin(2 * Xtrain) + epsilon
+    Ytrain1 = np.sin(Xtrain[0:N//3])
+    Ytrain2 = np.sin(Xtrain[N//3:2*N//3]) - 2 * np.exp(-0.5 * pow(Xtrain[N//3:2*N//3] - 2, 2))
+    Ytrain3 = -2 - (3 / (8 * np.pi)) * Xtrain[2*N//3:N] + (3 / 10) * np.sin(2 * Xtrain[2*N//3:N])
+    Ytrain = np.concatenate((Ytrain1, Ytrain2, Ytrain3))
+
+    Xtest = np.linspace(-2*np.pi, 2*np.pi, Ns)[:, None]
+
+    plt.scatter(Xtrain[0:N//3], Ytrain1, color='r')
+    plt.scatter(Xtrain[N//3:2*N//3], Ytrain2, color='b')
+    plt.scatter(Xtrain[2*N//3:N], Ytrain3, color='g')
+    plt.show()
+
 
 # normalization
 # Ymean, Ystd = np.mean(Ytrain), np.std(Ytrain)
@@ -108,16 +130,16 @@ elif func == "categorical":
 #***************************************
 # Model configuration
 #***************************************
-num_iter            = 4000             # Optimization iterations
+num_iter            = 5000             # Optimization iterations
 # You want lr optimised so ELBO is steady line, but not taking forever
 lr                  = 0.005         # Learning rate for Adam opt
-num_minibatch       = N                # Batch size for stochastic opt
-num_samples         = 10               # Number of MC samples
-num_predict_samples = 200              # Number of prediction samples
+num_minibatch       = 500                # Batch size for stochastic opt
+num_samples         = 25               # Number of MC samples
+num_predict_samples = 100              # Number of prediction samples
 num_data            = Xtrain.shape[0]  # Training size
 dimX                = Xtrain.shape[1]  # Input dimensions
 dimY                = 1                # Output dimensions
-num_ind             = 50               # Inducing size for f 
+num_ind             = 25               # Inducing size for f
 
 # TODO this might need to be different for numerical vs categorical output?
 X_placeholder = tf.placeholder(dtype = float_type,shape=[None, dimX])
@@ -132,20 +154,28 @@ iterator = tf.data.Iterator.from_string_handle(handle, train_dataset.output_type
 X,Y = iterator.get_next()
 
 m_GP = 'SMGP'
-K = 2
+K = 3
 
 # kernel and inducing points initialization
 class KERNEL:
     kern = RBF
-    lengthscales = 1.
-    sf2 = 1.
+    lengthscales = 0.5
+    sf2 = 0.5
+    ARD = True
+
+class ASSIGN_KERNEL:
+    kern = RBF
+    lengthscales = 1.0
+    sf2 = 0.1
     ARD = True
 
 input_dim = dimX
 pred_kernel = KERNEL.kern(input_dim=input_dim, lengthscales=KERNEL.lengthscales, variance=KERNEL.sf2, ARD=KERNEL.ARD, name="kernel") 
-assign_kernel = KERNEL.kern(input_dim=input_dim, lengthscales=KERNEL.lengthscales, variance=KERNEL.sf2, ARD=KERNEL.ARD, name="kernel_alpha") 
+assign_kernel = ASSIGN_KERNEL.kern(input_dim=input_dim, lengthscales=ASSIGN_KERNEL.lengthscales, variance=ASSIGN_KERNEL.sf2, ARD=ASSIGN_KERNEL.ARD, name="kernel_alpha")
 # Z, Z_assign = kmeans(Xtrain_norm,num_ind)[0], kmeans(Xtrain_norm,num_ind)[0]
+
 Z, Z_assign = kmeans(Xtrain, num_ind)[0], kmeans(Xtrain, num_ind)[0]
+
 pred_layer   = SVGP_Layer(kern=pred_kernel, Z=Z, num_inducing=num_ind, num_outputs=K)
 assign_layer = SVGP_Layer(kern=assign_kernel, Z=Z_assign, num_inducing=num_ind, num_outputs=K)
     
@@ -161,8 +191,6 @@ lowerbound = model._build_likelihood(X,Y)
 learning_rate = lr
 # Going to the bottom of the "basin"
 train_op = tf.train.AdamOptimizer(learning_rate = learning_rate).minimize(-1.*lowerbound)
-
-# TODO Figure out this training loop
 
 # prediction ops
 samples_y, samples_f = model.predict_samples(X, S=num_predict_samples)

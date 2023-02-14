@@ -121,6 +121,9 @@ class Gaussian(Likelihood):
         return -0.5 * np.log(2 * np.pi) - 0.5 * tf.log(self.variance) - 0.5 * (tf.square(Y - Fmu) + Fvar) / self.variance
 
 
+# class Bernoulli(Likelihood):
+
+
 class HeteroGaussian(Likelihood):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
