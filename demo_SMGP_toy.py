@@ -1,4 +1,5 @@
 import os
+
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = '3'
 #os.environ["CUDA_VISIBLE_DEVICES"]="0"
 
@@ -7,7 +8,7 @@ tf.logging.set_verbosity(tf.logging.ERROR)
 import numpy as np
 from scipy.cluster.vq import kmeans2, kmeans
 
-from ModulatedGPs.likelihoods import Gaussian
+from ModulatedGPs.likelihoods import Gaussian, Bernoulli
 from ModulatedGPs.models import SMGP
 from ModulatedGPs.layers import SVGP_Layer
 from ModulatedGPs.kernels import RBF
@@ -31,6 +32,7 @@ tf.set_random_seed(seed)
 # Load data
 #***************************************
 func = 'categorical'
+two_d_input = False
 
 if func == 'hetero':
     f = lambda X: np.cos(5*X)*np.exp(-X/2)
@@ -81,22 +83,35 @@ elif func == 'dataAssoc':
 elif func == 'categorical':
     N, Ns, lambda_ = 600, 100, .1
 
-    Xtrain = np.random.uniform(low=-6., high=6., size=(N, 1))
+    xz_min = -6
+    xz_max = 6
+    Xtrain = np.random.uniform(low=xz_min, high=xz_max, size=(N, 1))
 
     Ytrain = np.where(Xtrain < 0, 1, 0)
 
-    # to add occassional outliers
+    # to add occasional outliers
     outlier_indices = np.random.choice(N, size=int(N * lambda_), replace=False)
     Ytrain[outlier_indices] = 1 - Ytrain[outlier_indices]
 
-    # convert Ytrain to integer type
-    Ytrain = Ytrain.astype(int)
+    Xtest = np.linspace(xz_min, xz_max, Ns).reshape(Ns, 1)
+elif func == 'categorical2d':
+    N, Ns, lambda_ = 600, 100, .1
 
-    # encode Ytrain as categorical labels
-    label_encoder = LabelEncoder()
-    Ytrain = label_encoder.fit_transform(Ytrain.ravel()).reshape(-1, 1)
+    xz_min = [-6, -6]
+    xz_max = [6, 6]
+    Xtrain = np.random.uniform(low=xz_min, high=xz_max, size=(N, 2))
 
-    Xtest = np.linspace(-6, 6, Ns)[:, None]
+    Ytrain = np.where(Xtrain < [0, 0], 1, 0)
+
+    # to add occasional outliers
+    outlier_indices = np.random.choice(N, size=int(N * lambda_), replace=False)
+    Ytrain[outlier_indices] = 1 - Ytrain[outlier_indices]
+
+    Ytrain = Ytrain[:, 0:1]
+
+    Xtest = np.linspace(xz_min, xz_max, Ns)
+
+    two_d_input = True
 elif func == 'multiModal':
     N, Ns = 3000, 500
 
@@ -130,10 +145,10 @@ elif func == 'multiModal':
 #***************************************
 # Model configuration
 #***************************************
-num_iter            = 5000             # Optimization iterations
+num_iter            = 100             # Optimization iterations
 # You want lr optimised so ELBO is steady line, but not taking forever
 lr                  = 0.005         # Learning rate for Adam opt
-num_minibatch       = 500                # Batch size for stochastic opt
+num_minibatch       = N                # Batch size for stochastic opt
 num_samples         = 25               # Number of MC samples
 num_predict_samples = 100              # Number of prediction samples
 num_data            = Xtrain.shape[0]  # Training size
@@ -141,7 +156,6 @@ dimX                = Xtrain.shape[1]  # Input dimensions
 dimY                = 1                # Output dimensions
 num_ind             = 25               # Inducing size for f
 
-# TODO this might need to be different for numerical vs categorical output?
 X_placeholder = tf.placeholder(dtype = float_type,shape=[None, dimX])
 Y_placeholder = tf.placeholder(dtype = float_type,shape=[None, dimY])
 # X_placeholder = tf.placeholder(dtype = float_type,shape=[dimX])
@@ -154,7 +168,7 @@ iterator = tf.data.Iterator.from_string_handle(handle, train_dataset.output_type
 X,Y = iterator.get_next()
 
 m_GP = 'SMGP'
-K = 3
+K = 2
 
 # kernel and inducing points initialization
 class KERNEL:
@@ -180,7 +194,7 @@ pred_layer   = SVGP_Layer(kern=pred_kernel, Z=Z, num_inducing=num_ind, num_outpu
 assign_layer = SVGP_Layer(kern=assign_kernel, Z=Z_assign, num_inducing=num_ind, num_outputs=K)
     
 # model definition
-lik = Gaussian(D=K)
+lik = Bernoulli()
 model = SMGP(likelihood=lik, pred_layer=pred_layer, assign_layer=assign_layer, 
             K=K, num_samples=num_samples, num_data=num_data)
 
@@ -235,57 +249,109 @@ mu_avg, fmu_avg = np.mean(samples_y, 0), np.mean(samples_f, 0)
 # samples_y_stack = np.reshape(samples_y, (num_predict_samples*Xtest_norm.shape[0],-1))
 # samples_f_stack = np.reshape(samples_f, (num_predict_samples*Xtest_norm.shape[0],-1))
 
-# `samples_y` has a size of 200, 50, 1 as 200 predicition points, 50 inducing points, and output dims 1.
-# so they then need to be reshaped to be a series of the outputs.
-
 samples_y_stack = np.reshape(samples_y, (num_predict_samples*Xtest.shape[0],-1))
 samples_f_stack = np.reshape(samples_f, (num_predict_samples*Xtest.shape[0],-1))
 # samples = samples * Ystd + Ymean
 
-f, ax = plt.subplots(2, 2, figsize=(14,8))
 # Xt_tiled = np.tile(Xtest_norm, [num_predict_samples, 1])
 Xt_tiled = np.tile(Xtest, [num_predict_samples, 1])
-ax[0,0].scatter(Xt_tiled.flatten(), samples_y_stack.flatten(), marker='+', alpha=0.01, color=mcolors.TABLEAU_COLORS['tab:red'])
-ax[0,0].scatter(Xt_tiled.flatten(), samples_f_stack.flatten(), marker='+', alpha=0.01, color=mcolors.TABLEAU_COLORS['tab:blue'])
-# ax[0,0].scatter(Xtrain_norm, Ytrain_norm, marker='x', color='black', alpha=0.1)
-ax[0,0].scatter(Xtrain, Ytrain, marker='x', color='black', alpha=0.1)
-ax[0,0].set_title(m_GP)
-ax[0,0].set_xlabel('x') 
-ax[0,0].set_ylabel('y')
-# ax[0,0].set_ylim(1.2*min(Ytrain_norm), 1.2*max(Ytrain_norm))
-ax[0,0].set_ylim(1.2*min(Ytrain), 1.2*max(Ytrain))
-ax[0,0].grid()
 
-ax[0,1].plot(iters, elbos, 'o-', ms=8, alpha=0.5)
-ax[0,1].set_xlabel('Iterations')
-ax[0,1].set_ylabel('ELBO')
-ax[0,1].grid()
+if not two_d_input:
+    f, ax = plt.subplots(2, 2, figsize=(14,8))
 
-# assign_ = sess.run(assign,{X:Xtrain_norm})
-assign_ = sess.run(assign,{X:Xtrain})
-# ax[1,0].plot(Xtrain_norm, assign_, 'o')
-ax[1,0].plot(Xtrain, assign_, 'o')
-ax[1,0].set_xlabel('x')
-ax[1,0].set_ylabel('softmax(assignment)')
-ax[1,0].grid()
+    ax[0,0].scatter(Xt_tiled.flatten(), samples_y_stack.flatten(), marker='+', alpha=0.01, color=mcolors.TABLEAU_COLORS['tab:red'])
+    ax[0,0].scatter(Xt_tiled.flatten(), samples_f_stack.flatten(), marker='+', alpha=0.01, color=mcolors.TABLEAU_COLORS['tab:blue'])
+    # ax[0,0].scatter(Xtrain_norm, Ytrain_norm, marker='x', color='black', alpha=0.1)
+    ax[0,0].scatter(Xtrain, Ytrain, marker='x', color='black', alpha=0.1)
+    ax[0,0].set_title(m_GP)
+    ax[0,0].set_xlabel('x')
+    ax[0,0].set_ylabel('y')
+    # ax[0,0].set_ylim(1.2*min(Ytrain_norm), 1.2*max(Ytrain_norm))
+    ax[0,0].set_ylim(1.2*min(Ytrain), 1.2*max(Ytrain))
+    ax[0,0].grid()
 
-# fmean_, fvar_ = np.mean(sess.run(fmean,{X:Xtest_norm}),0), np.mean(sess.run(fvar,{X:Xtest_norm}),0)
-fmean_, fvar_ = np.mean(sess.run(fmean,{X:Xtest}),0), np.mean(sess.run(fvar,{X:Xtest}),0)
-lb, ub = (fmean_ - 2*fvar_**0.5), (fmean_ + 2*fvar_**0.5)
-I = np.argmax(assign_, 1)
-for i in range(K):
-    # ax[1,1].plot(Xtest_norm.flatten(), fmean_[:,i], '-', alpha=1., color=colors[i])
-    # ax[1,1].fill_between(Xtest_norm.flatten(), lb[:,i], ub[:,i], alpha=0.3, color=colors[i])
-    ax[1, 1].plot(Xtest.flatten(), fmean_[:, i], '-', alpha=1., color=colors[i])
-    ax[1, 1].fill_between(Xtest.flatten(), lb[:, i], ub[:, i], alpha=0.3, color=colors[i])
-# ax[1,1].scatter(Xtrain_norm, Ytrain_norm, marker='x', color='black', alpha=0.5)
-ax[1,1].scatter(Xtrain, Ytrain, marker='x', color='black', alpha=0.5)
-ax[1,1].set_xlabel('x')
-ax[1,1].set_ylabel('Pred. of GP experts')
-ax[1,1].grid()
+    ax[0,1].plot(iters, elbos, 'o-', ms=8, alpha=0.5)
+    ax[0,1].set_xlabel('Iterations')
+    ax[0,1].set_ylabel('ELBO')
+    ax[0,1].grid()
 
-plt.tight_layout()
-plt.savefig('figs/'+m_GP+'_'+func+'_toy.png')
-plt.show()
+    # assign_ = sess.run(assign,{X:Xtrain_norm})
+    assign_ = sess.run(assign,{X:Xtrain})
+    # ax[1,0].plot(Xtrain_norm, assign_, 'o')
+    ax[1,0].plot(Xtrain, assign_, 'o')
+    ax[1,0].set_xlabel('x')
+    ax[1,0].set_ylabel('softmax(assignment)')
+    ax[1,0].grid()
 
+    # fmean_, fvar_ = np.mean(sess.run(fmean,{X:Xtest_norm}),0), np.mean(sess.run(fvar,{X:Xtest_norm}),0)
+    fmean_, fvar_ = np.mean(sess.run(fmean,{X:Xtest}),0), np.mean(sess.run(fvar,{X:Xtest}),0)
+    lb, ub = (fmean_ - 2*fvar_**0.5), (fmean_ + 2*fvar_**0.5)
+    I = np.argmax(assign_, 1)
+    for i in range(K):
+        # ax[1,1].plot(Xtest_norm.flatten(), fmean_[:,i], '-', alpha=1., color=colors[i])
+        # ax[1,1].fill_between(Xtest_norm.flatten(), lb[:,i], ub[:,i], alpha=0.3, color=colors[i])
+        ax[1, 1].plot(Xtest.flatten(), fmean_[:, i], '-', alpha=1., color=colors[i])
+        ax[1, 1].fill_between(Xtest.flatten(), lb[:, i], ub[:, i], alpha=0.3, color=colors[i])
+    # ax[1,1].scatter(Xtrain_norm, Ytrain_norm, marker='x', color='black', alpha=0.5)
+    ax[1,1].scatter(Xtrain, Ytrain, marker='x', color='black', alpha=0.5)
+    ax[1,1].set_xlabel('x')
+    ax[1,1].set_ylabel('Pred. of GP experts')
+    ax[1,1].grid()
 
+    plt.tight_layout()
+    plt.savefig('figs/'+m_GP+'_'+func+'_toy.png')
+    plt.show()
+else:
+    fig = plt.figure(figsize=(14, 8))
+    ax = []
+    for i in range(1, 5):
+        if i == 2:
+            ax.append(fig.add_subplot(2, 2, i))
+            continue
+        ax.append(fig.add_subplot(2, 2, i, projection='3d'))
+
+    ax[0].scatter(Xt_tiled[:, 0:1], Xt_tiled[:, 1:2], samples_y_stack, marker='+', alpha=0.01, color=mcolors.TABLEAU_COLORS['tab:red'])
+    ax[0].scatter(Xt_tiled[:, 0:1], Xt_tiled[:, 1:2], samples_f_stack, marker='+', alpha=0.01, color=mcolors.TABLEAU_COLORS['tab:blue'])
+    # ax[0,0].scatter(Xtrain_norm, Ytrain_norm, marker='x', color='black', alpha=0.1)
+    ax[0].scatter(Xtrain[:, 0:1], Xtrain[:, 1:2], Ytrain, marker='x', color='black', alpha=0.1)
+    ax[0].set_title(m_GP)
+    ax[0].set_xlabel('x')
+    ax[0].set_ylabel('y')
+    ax[0].set_zlabel('z')
+    # ax[0,0].set_ylim(1.2*min(Ytrain_norm), 1.2*max(Ytrain_norm))
+    ax[0].set_zlim(1.2*min(Ytrain), 1.2*max(Ytrain))
+    ax[0].grid()
+
+    ax[1].plot(iters, elbos, 'o-', ms=8, alpha=0.5)
+    ax[1].set_xlabel('Iterations')
+    ax[1].set_ylabel('ELBO')
+    ax[1].grid()
+
+    # assign_ = sess.run(assign,{X:Xtrain_norm})
+    assign_ = sess.run(assign,{X:Xtrain})
+    # ax[1,0].plot(Xtrain_norm, assign_, 'o')
+    # ax[2].plot(Xtrain[:, 0:1], Xtrain[:, 1:2], assign_, 'o')
+    # ax[2].set_xlabel('x')
+    # ax[2].set_ylabel('y')
+    # ax[2].set_zlabel('softmax(assignment)')
+    # ax[2].grid()
+
+    # fmean_, fvar_ = np.mean(sess.run(fmean,{X:Xtest_norm}),0), np.mean(sess.run(fvar,{X:Xtest_norm}),0)
+    fmean_, fvar_ = np.mean(sess.run(fmean,{X:Xtest}),0), np.mean(sess.run(fvar,{X:Xtest}),0)
+    lb, ub = (fmean_ - 2*fvar_**0.5), (fmean_ + 2*fvar_**0.5)
+    I = np.argmax(assign_, 1)
+    for i in range(K):
+        # ax[1,1].plot(Xtest_norm.flatten(), fmean_[:,i], '-', alpha=1., color=colors[i])
+        # ax[1,1].fill_between(Xtest_norm.flatten(), lb[:,i], ub[:,i], alpha=0.3, color=colors[i])
+        ax[3].plot(Xtest[:, 0:1], Xtest[:, 1:2], fmean_[:, i:i+1], '-', alpha=1., color=colors[i])
+        ax[3].fill_between(Xtest[:, 0:1], Xtest[:, 1:2], lb[:, i:i+1], ub[:, i:i+1], alpha=0.3, color=colors[i])
+    # ax[1,1].scatter(Xtrain_norm, Ytrain_norm, marker='x', color='black', alpha=0.5)
+    ax[3].scatter(Xtrain[:, 0:1], Xtrain[:, 1:2], Ytrain, marker='x', color='black', alpha=0.5)
+    ax[3].set_xlabel('x')
+    ax[3].set_ylabel('y')
+    ax[3].set_zlabel('Pred. of GP experts')
+    ax[3].grid()
+
+    plt.tight_layout()
+    plt.savefig('figs/'+m_GP+'_'+func+'_toy.png')
+    plt.show()

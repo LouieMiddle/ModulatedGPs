@@ -121,8 +121,37 @@ class Gaussian(Likelihood):
         return -0.5 * np.log(2 * np.pi) - 0.5 * tf.log(self.variance) - 0.5 * (tf.square(Y - Fmu) + Fvar) / self.variance
 
 
-# class Bernoulli(Likelihood):
+def inv_probit(x):
+    jitter = 1e-3  # ensures output is strictly between 0 and 1
+    return 0.5 * (1.0 + tf.erf(x / np.sqrt(2.0))) * (1 - 2 * jitter) + jitter
 
+
+class Bernoulli(Likelihood):
+    def __init__(self, invlink=inv_probit, **kwargs):
+        super().__init__(**kwargs)
+        self.invlink = invlink
+
+    def logp(self, F, Y):
+        return logdensities.bernoulli(Y, self.invlink(F))
+
+    def predict_mean_and_var(self, Fmu, Fvar):
+        if self.invlink is inv_probit:
+            p = inv_probit(Fmu / tf.sqrt(1 + Fvar))
+            return p, p - tf.square(p)
+        else:
+            # for other invlink, use quadrature
+            return super().predict_mean_and_var(Fmu, Fvar)
+
+    def predict_density(self, Fmu, Fvar, Y):
+        p = self.predict_mean_and_var(Fmu, Fvar)[0]
+        return logdensities.bernoulli(Y, p)
+
+    def conditional_mean(self, F):
+        return self.invlink(F)
+
+    def conditional_variance(self, F):
+        p = self.conditional_mean(F)
+        return p - tf.square(p)
 
 class HeteroGaussian(Likelihood):
     def __init__(self, **kwargs):
