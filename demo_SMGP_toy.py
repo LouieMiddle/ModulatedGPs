@@ -221,7 +221,8 @@ train_handle  = sess.run(train_iterator.string_handle())
 sess.run(train_iterator.initializer,{X_placeholder:Xtrain, Y_placeholder:Ytrain})
 
 print('{:>5s}'.format("iter") + '{:>24s}'.format("ELBO:"))
-iters = []; elbos = []
+iters = []
+elbos = []
 for i in range(1,num_iter+1): 
     try:        
         sess.run(train_op,feed_dict={handle:train_handle})       
