@@ -114,14 +114,13 @@ fmean_, fvar_ = np.mean(model.predict_y(Xtest), 0), np.mean(model.predict_y(Xtes
 lb, ub = (fmean_ - 2 * fvar_ ** 0.5), (fmean_ + 2 * fvar_ ** 0.5)
 I = np.argmax(assign_, 1)
 for i in range(K):
-    test = fmean_[:, :, i]
-    ax[1, 1].plot(Xtest.flatten(), fmean_[:, :, i], '-', alpha=1., color=colors[i])
-    ax[1, 1].fill_between(Xtest.flatten(), lb[:, i], ub[:, i], alpha=0.3, color=colors[i])
+    ax[1, 1].plot(Xtest.flatten(), fmean_[:, :, i][0], '-', alpha=1., color=colors[i])
+    ax[1, 1].fill_between(Xtest.flatten(), lb[:, :, i][0], ub[:, :, i][0], alpha=0.3, color=colors[i])
 ax[1, 1].scatter(Xtrain, Ytrain, marker='x', color='black', alpha=0.5)
 ax[1, 1].set_xlabel('x')
 ax[1, 1].set_ylabel('Pred. of GP experts')
 ax[1, 1].grid()
 
 plt.tight_layout()
-plt.savefig('figs/test_toy.png')
+plt.savefig('figs/demo_tf2.png')
 plt.show()
