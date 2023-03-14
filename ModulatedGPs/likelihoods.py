@@ -21,10 +21,10 @@ class Gaussian(ScalarLikelihood):
     """
 
     def __init__(
-        self,
-        variance: Optional[ConstantOrFunction] = None,
-        D: int = None,
-        **kwargs: Any,
+            self,
+            variance: Optional[ConstantOrFunction] = None,
+            D: int = None,
+            **kwargs: Any,
     ) -> None:
         """
         :param variance: The noise variance;
@@ -55,4 +55,5 @@ class Gaussian(ScalarLikelihood):
         return tf.reduce_sum(logdensities.gaussian(Y, Fmu, Fvar + self.variance), axis=-1)
 
     def _variational_expectations(self, X: TensorType, Fmu: TensorType, Fvar: TensorType, Y: TensorType) -> tf.Tensor:
-        return -0.5 * np.log(2 * np.pi) - 0.5 * tf.math.log(self.variance) - 0.5 * ((Y - Fmu) ** 2 + Fvar) / self.variance
+        return -0.5 * np.log(2 * np.pi) - 0.5 * tf.math.log(self.variance) - 0.5 * (
+                    (Y - Fmu) ** 2 + Fvar) / self.variance

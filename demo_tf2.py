@@ -7,6 +7,7 @@ from scipy.cluster.vq import kmeans
 
 from ModulatedGPs.likelihoods import Gaussian
 from ModulatedGPs.models import SMGP
+from ModulatedGPs.utils import load_multimodal_data, load_categorical_data
 
 print(tf.test.is_built_with_cuda())
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
@@ -17,20 +18,11 @@ seed = 0
 np.random.seed(seed)
 tf.random.set_seed(seed)
 
-N, Ns, lambda_ = 600, 100, 0.1
-
-x_min = -6.0
-x_max = 6.0
-Xtrain = np.random.uniform(low=x_min, high=x_max, size=(N, 1))
-
-Ytrain = np.where(Xtrain < 0.0, 1.0, 0.0)
-outlier_indices = np.random.choice(N, size=int(N * lambda_), replace=False)
-Ytrain[outlier_indices] = 1 - Ytrain[outlier_indices]
-
-Xtest = np.linspace(x_min, x_max, Ns).reshape(Ns, 1)
+# N, Xtrain, Ytrain, Xtest = load_categorical_data()
+N, Xtrain, Ytrain, Xtest = load_multimodal_data()
 
 # Model configuration
-num_iter = 100  # Optimization iterations
+num_iter = 500  # Optimization iterations
 lr = 0.005  # Learning rate for Adam opt
 num_minibatch = N  # Batch size for stochastic opt
 num_samples = 25  # Number of MC samples
@@ -39,7 +31,7 @@ num_data = Xtrain.shape[0]  # Training size
 dimX = Xtrain.shape[1]  # Input dimensions
 dimY = 1  # Output dimensions
 num_ind = 25  # Inducing size for f
-K = 2
+K = 3
 
 lik = Gaussian(D=K)
 
@@ -72,6 +64,9 @@ for i in range(1, num_iter + 1):
         # Use the optimizer to apply the gradients to update the trainable variables
         optimizer.apply_gradients(zip(gradients, model.trainable_variables))
 
+        if i / 500 == 1:
+            print(500)
+
         if i % 100 == 0 or i == 0:
             print('{:>5d}'.format(i) + '{:>24.6f}'.format(elbo))
             iters.append(i)
@@ -80,10 +75,16 @@ for i in range(1, num_iter + 1):
         print("stopping training")
         break
 
-samples_y, samples_f = model.predict_samples(Xtest, S=num_predict_samples)
+n_batches = max(int(Xtest.shape[0] / 500), 1)
+Ss_y, Ss_f = [], []
+for X_batch in np.array_split(Xtest, n_batches):
+    samples_y, samples_f = model.predict_samples(X_batch, S=num_predict_samples)
+    Ss_y.append(samples_y)
+    Ss_f.append(samples_f)
+samples_y, samples_f = np.hstack(Ss_y), np.hstack(Ss_f)
 mu_avg, fmu_avg = np.mean(samples_y, 0), np.mean(samples_f, 0)
-samples_y_stack = np.reshape(samples_y, (num_predict_samples * Xtest.shape[0], -1))
-samples_f_stack = np.reshape(samples_f, (num_predict_samples * Xtest.shape[0], -1))
+samples_y_stack = np.reshape(samples_y, (num_predict_samples*Xtest.shape[0], -1))
+samples_f_stack = np.reshape(samples_f, (num_predict_samples*Xtest.shape[0], -1))
 Xt_tiled = np.tile(Xtest, [num_predict_samples, 1])
 
 f, ax = plt.subplots(2, 2, figsize=(14, 8))
@@ -110,17 +111,18 @@ ax[1, 0].set_xlabel('x')
 ax[1, 0].set_ylabel('softmax(assignment)')
 ax[1, 0].grid()
 
-fmean_, fvar_ = np.mean(model.predict_y(Xtest), 0), np.mean(model.predict_y(Xtest), 0)
+fmean, fvar = model.predict_y(Xtest)
+fmean_, fvar_ = np.mean(fmean, 0), np.mean(fvar, 0)
 lb, ub = (fmean_ - 2 * fvar_ ** 0.5), (fmean_ + 2 * fvar_ ** 0.5)
 I = np.argmax(assign_, 1)
 for i in range(K):
-    ax[1, 1].plot(Xtest.flatten(), fmean_[:, :, i][0], '-', alpha=1., color=colors[i])
-    ax[1, 1].fill_between(Xtest.flatten(), lb[:, :, i][0], ub[:, :, i][0], alpha=0.3, color=colors[i])
+    ax[1, 1].plot(Xtest.flatten(), fmean_[:, i], '-', alpha=1., color=colors[i])
+    ax[1, 1].fill_between(Xtest.flatten(), lb[:, i], ub[:, i], alpha=0.3, color=colors[i])
 ax[1, 1].scatter(Xtrain, Ytrain, marker='x', color='black', alpha=0.5)
 ax[1, 1].set_xlabel('x')
 ax[1, 1].set_ylabel('Pred. of GP experts')
 ax[1, 1].grid()
 
 plt.tight_layout()
-plt.savefig('figs/demo_tf2.png')
+plt.savefig('figs/demo_tf2_nan_elbo_after_500_iters.png')
 plt.show()

@@ -32,7 +32,7 @@ class SGP(Module):
         return tf.tile(X[None, :, :], [S, 1, 1]), None
 
     def propagate(self, Xt, full_cov=False):
-        Fmean, Fvar = self.pred_layer.predict_y(Xt, full_cov=full_cov)
+        Fmean, Fvar = self.pred_layer.predict_f(Xt, full_cov=full_cov)
         return Fmean, Fvar
 
     def _build_predict(self, Xt, full_cov=False):
@@ -87,7 +87,7 @@ class SMGP(SGP):
         self.K = K
 
     def propagate_logassign(self, Xt, full_cov=False):
-        logassign_mean, logassign_var = self.assign_layer.predict_y(Xt, full_cov=full_cov)
+        logassign_mean, logassign_var = self.assign_layer.predict_f(Xt, full_cov=full_cov)
         return logassign_mean, logassign_var
 
     def _build_predict_logassign(self, Xt, full_cov=False):

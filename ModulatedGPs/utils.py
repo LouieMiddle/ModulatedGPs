@@ -1,3 +1,4 @@
+import numpy as np
 import tensorflow as tf
 from gpflow import config
 
@@ -33,3 +34,39 @@ def reparameterize(mean, var, z, full_cov=False):
         z_res = tf.transpose(z, [0, 2, 1])[:, :, :, None]  # SND->SDN1
         f = mean + tf.matmul(chol, z_res)[:, :, :, 0]  # SDN(1)
         return tf.transpose(f, (0, 2, 1))  # SND
+
+
+def load_categorical_data():
+    N, Ns, lambda_ = 600, 100, 0.1
+
+    x_min = -6.0
+    x_max = 6.0
+    Xtrain = np.random.uniform(low=x_min, high=x_max, size=(N, 1))
+
+    Ytrain = np.where(Xtrain < 0.0, 1.0, 0.0)
+    outlier_indices = np.random.choice(N, size=int(N * lambda_), replace=False)
+    Ytrain[outlier_indices] = 1 - Ytrain[outlier_indices]
+
+    Xtest = np.linspace(x_min, x_max, Ns).reshape(Ns, 1)
+
+    return N, Xtrain, Ytrain, Xtest
+
+
+def load_multimodal_data():
+    N, Ns = 3000, 500
+
+    epsilon = np.random.normal(0, 0.005, (N, 1))
+
+    Xtrain = np.random.uniform(low=-2 * np.pi, high=2 * np.pi, size=(N, 1))
+
+    # Ytrain1 = np.sin(Xtrain) + epsilon
+    # Ytrain2 = np.sin(Xtrain) - 2 * np.exp(-0.5 * pow(Xtrain - 2, 2)) + epsilon
+    # Ytrain3 = -1 - (3/8) * np.pi * Xtrain + (3/10) * np.sin(2 * Xtrain) + epsilon
+    Ytrain1 = np.sin(Xtrain[0:N // 3])
+    Ytrain2 = np.sin(Xtrain[N // 3:2 * N // 3]) - 2 * np.exp(-0.5 * pow(Xtrain[N // 3:2 * N // 3] - 2, 2))
+    Ytrain3 = -2 - (3 / (8 * np.pi)) * Xtrain[2 * N // 3:N] + (3 / 10) * np.sin(2 * Xtrain[2 * N // 3:N])
+    Ytrain = np.concatenate((Ytrain1, Ytrain2, Ytrain3))
+
+    Xtest = np.linspace(-2 * np.pi, 2 * np.pi, Ns)[:, None]
+
+    return N, Xtrain, Ytrain, Xtest
