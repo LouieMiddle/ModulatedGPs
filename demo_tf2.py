@@ -2,12 +2,13 @@ import gpflow.kernels
 import matplotlib.colors as mcolors
 import numpy as np
 import tensorflow as tf
+from gpflow.likelihoods import Gaussian
 from matplotlib import pyplot as plt
 from scipy.cluster.vq import kmeans
 
-from ModulatedGPs.likelihoods import Gaussian
+# from ModulatedGPs.likelihoods import Gaussian
 from ModulatedGPs.models import SMGP
-from ModulatedGPs.utils import load_multimodal_data, load_categorical_data
+from ModulatedGPs.utils import load_multimodal_data, load_categorical_data, load_data_assoc
 
 print(tf.test.is_built_with_cuda())
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
@@ -20,9 +21,13 @@ tf.random.set_seed(seed)
 
 # N, Xtrain, Ytrain, Xtest = load_categorical_data()
 N, Xtrain, Ytrain, Xtest = load_multimodal_data()
+# N, Xtrain, Ytrain, Xtest = load_data_assoc()
+
+# plt.scatter(Xtrain, Ytrain)
+# plt.show()
 
 # Model configuration
-num_iter = 500  # Optimization iterations
+num_iter = 1000  # Optimization iterations
 lr = 0.005  # Learning rate for Adam opt
 num_minibatch = N  # Batch size for stochastic opt
 num_samples = 25  # Number of MC samples
@@ -33,12 +38,20 @@ dimY = 1  # Output dimensions
 num_ind = 25  # Inducing size for f
 K = 3
 
-lik = Gaussian(D=K)
+lik = Gaussian(variance=1.0 * np.ones((1, K)))
 
 input_dim = dimX
 pred_kernel = gpflow.kernels.SquaredExponential(variance=0.5, lengthscales=0.5)
 assign_kernel = gpflow.kernels.SquaredExponential(variance=0.1, lengthscales=1.0)
 Z, Z_assign = kmeans(Xtrain, num_ind)[0], kmeans(Xtrain, num_ind)[0]
+
+# pred_layer = gpflow.models.SVGP(kernel=pred_kernel, likelihood=lik, inducing_variable=Z, num_latent_gps=K)
+# assign_layer = gpflow.models.SVGP(kernel=assign_kernel, likelihood=lik, inducing_variable=Z_assign, num_latent_gps=K)
+
+# TODO: I believe the problem is somehow to do with how the likelihood was used before
+#  Before the model took in the likelihood and the layers took in no likelihood.
+#  My hunch is the broadcasting likelihood somehow is broadcasting values around to the layers?
+#  But it is not obvious....
 
 pred_layer = gpflow.models.SVGP(kernel=pred_kernel, likelihood=lik, inducing_variable=Z, num_latent_gps=K)
 assign_layer = gpflow.models.SVGP(kernel=assign_kernel, likelihood=lik, inducing_variable=Z_assign, num_latent_gps=K)
@@ -55,20 +68,21 @@ elbos = []
 for i in range(1, num_iter + 1):
     try:
         with tf.GradientTape() as tape:
+            if i == 377:
+                print("here")
             # Record gradients of the loss with respect to the trainable variables
             elbo = model._build_likelihood(Xtrain, Ytrain)
             loss_value = -elbo
-            # gpflow.utilities.print_summary(model)
+            # if i > 300:
+            #     print("iter ", i, ": ", elbo)
             gradients = tape.gradient(loss_value, model.trainable_variables)
 
         # Use the optimizer to apply the gradients to update the trainable variables
         optimizer.apply_gradients(zip(gradients, model.trainable_variables))
 
-        if i / 500 == 1:
-            print(500)
-
         if i % 100 == 0 or i == 0:
             print('{:>5d}'.format(i) + '{:>24.6f}'.format(elbo))
+            # gpflow.utilities.print_summary(model)
             iters.append(i)
             elbos.append(elbo)
     except KeyboardInterrupt as e:
@@ -124,5 +138,5 @@ ax[1, 1].set_ylabel('Pred. of GP experts')
 ax[1, 1].grid()
 
 plt.tight_layout()
-plt.savefig('figs/demo_tf2_nan_elbo_after_500_iters.png')
+plt.savefig('figs/demo_tf2.png')
 plt.show()

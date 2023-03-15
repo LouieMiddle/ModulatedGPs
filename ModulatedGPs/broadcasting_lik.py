@@ -41,24 +41,6 @@ class BroadcastingLikelihood:
                                                                                 vars_ND[0])
         return self._broadcast(f, [Fmu, Fvar], [Y])
 
-    def logp(self, F, Y):
-        f = lambda vars_SND, vars_ND: self.likelihood.logp(vars_SND[0], vars_ND[0])
-        return self._broadcast(f, [F], [Y])
-
-    def conditional_mean(self, F):
-        f = lambda vars_SND, vars_ND: self.likelihood.conditional_mean(vars_SND[0])
-        return self._broadcast(f, [F], [])
-
-    def conditional_variance(self, F):
-        f = lambda vars_SND, vars_ND: self.likelihood.conditional_variance(vars_SND[0])
-        return self._broadcast(f, [F], [])
-
     def predict_mean_and_var(self, X, Fmu, Fvar):
         f = lambda vars_SND, vars_ND: self.likelihood._predict_mean_and_var(X, vars_SND[0], vars_SND[1])
         return self._broadcast(f, [Fmu, Fvar], [])
-
-    def predict_density(self, Fmu, Fvar, Y):
-        f = lambda vars_SND, vars_ND: self.likelihood.predict_density(vars_SND[0],
-                                                                      vars_SND[1],
-                                                                      vars_ND[0])
-        return self._broadcast(f, [Fmu, Fvar], [Y])

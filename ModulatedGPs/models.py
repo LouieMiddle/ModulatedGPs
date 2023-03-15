@@ -39,41 +39,10 @@ class SGP(Module):
         Fmeans, Fvars = self.propagate(Xt, full_cov=full_cov)
         return Fmeans, Fvars
 
-    def E_log_p_Y(self, Xt, Y):
-        Fmean, Fvar = self._build_predict(Xt, full_cov=False)
-        var_exp = self.likelihood.variational_expectations(Xt, Fmean, Fvar, Y)
-        return tf.reduce_mean(tf.reduce_sum(var_exp, 2), 0)
-
-    def _build_likelihood(self, X, Y):
-        Xt = self.integrate(X, self.num_samples)[0]
-        L = tf.reduce_mean(self.E_log_p_Y(Xt, Y))
-        return L - self.pred_layer.KL() / self.num_data
-
-    def predict_f(self, Xnew, S=1):
-        Xnewt = self.integrate(Xnew, S)[0]
-        return self._build_predict(Xnewt, full_cov=False)
-
     def predict_y(self, Xnew, S=1):
         Xnewt = self.integrate(Xnew, S)[0]
         Fmean, Fvar = self._build_predict(Xnewt, full_cov=False)
         return self.likelihood.predict_mean_and_var([], Fmean, Fvar)
-
-    def predict_samples(self, Xnew, S=1):
-        Fmean, Fvar = self.predict_f(Xnew, S)
-        mean, var = self.likelihood.predict_mean_and_var([], Fmean, Fvar)
-        z = tf.random_normal(tf.shape(Fmean), dtype=float_type)
-        samples_y = reparameterize(mean, var, z)
-        samples_f = reparameterize(Fmean, Fvar, z)
-        return samples_y, samples_f
-
-    def predict_density(self, Xnew, Ynew, S):
-        Fmean, Var = self.predict_y(Xnew, S)
-        l = self.likelihood.predict_density(Fmean, Var, Ynew)
-        log_num_samples = tf.log(tf.cast(S, float_type))
-        return tf.reduce_logsumexp(l - log_num_samples, axis=0)
-
-    def get_inducing_Z(self):
-        return self.pred_layer.Z
 
 
 class SMGP(SGP):
@@ -105,6 +74,7 @@ class SMGP(SGP):
     def E_log_p_Y(self, Xt, Y, W_SND):
         Fmean, Fvar = self._build_predict(Xt, full_cov=False)
         var_exp = self.likelihood.variational_expectations(Xt, Fmean, Fvar, Y)
+        # TODO: nans are introduced here
         var_exp *= tf.cast(W_SND, dtype=float_type)
         return tf.reduce_logsumexp(tf.reduce_sum(var_exp, 2), 0) - np.log(self.num_samples)
 
