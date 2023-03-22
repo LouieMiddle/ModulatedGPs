@@ -37,10 +37,9 @@ class BroadcastingLikelihood:
                 return tf.reshape(flattened_result, [S, N, -1])
 
     def variational_expectations(self, X, Fmu, Fvar, Y):
-        f = lambda vars_SND, vars_ND: self.likelihood._variational_expectations([], vars_SND[0], vars_SND[1],
-                                                                                vars_ND[0])
+        f = lambda vars_SND, vars_ND: self.likelihood._variational_expectations([], vars_SND[0], vars_SND[1], vars_ND[0])
         return self._broadcast(f, [Fmu, Fvar], [Y])
 
     def predict_mean_and_var(self, X, Fmu, Fvar):
-        f = lambda vars_SND, vars_ND: self.likelihood._predict_mean_and_var(X, vars_SND[0], vars_SND[1])
+        f = lambda vars_SND, vars_ND: self.likelihood._predict_mean_and_var([], vars_SND[0], vars_SND[1])
         return self._broadcast(f, [Fmu, Fvar], [])

@@ -3,10 +3,11 @@ from typing import Optional, Any
 import numpy as np
 import tensorflow as tf
 from gpflow import logdensities
-from gpflow.base import TensorType, MeanAndVariance
+from gpflow.base import TensorType, MeanAndVariance, Parameter
 from gpflow.likelihoods import ScalarLikelihood
 from gpflow.utilities.parameter_or_function import ConstantOrFunction, ParameterOrFunction, \
     prepare_parameter_or_function
+import tensorflow_probability as tfp
 
 
 class Gaussian(ScalarLikelihood):
@@ -22,7 +23,7 @@ class Gaussian(ScalarLikelihood):
 
     def __init__(
             self,
-            variance: Optional[ConstantOrFunction] = None,
+            variance=1e-0,
             D: int = None,
             **kwargs: Any,
     ) -> None:
@@ -32,11 +33,12 @@ class Gaussian(ScalarLikelihood):
         """
         super().__init__(**kwargs)
 
-        if variance is None:
-            variance = 1.0
         if D is not None:
             variance = variance * np.ones((1, D))
-        self.variance: Optional[ParameterOrFunction] = prepare_parameter_or_function(variance)
+
+        variance = np.maximum(variance - 1e-6, np.finfo(np.float64).eps)
+        variance = variance + np.log(-np.expm1(-variance))
+        self.variance: Optional[ParameterOrFunction] = Parameter(variance)
 
     def _scalar_log_prob(self, X: TensorType, F: TensorType, Y: TensorType) -> tf.Tensor:
         return logdensities.gaussian(Y, F, self.variance)
@@ -54,6 +56,7 @@ class Gaussian(ScalarLikelihood):
     def _predict_log_density(self, X: TensorType, Fmu: TensorType, Fvar: TensorType, Y: TensorType) -> tf.Tensor:
         return tf.reduce_sum(logdensities.gaussian(Y, Fmu, Fvar + self.variance), axis=-1)
 
+    # NOTE: Even though the SVGP elbo uses this, it's never called from the SMGP model
     def _variational_expectations(self, X: TensorType, Fmu: TensorType, Fvar: TensorType, Y: TensorType) -> tf.Tensor:
         return -0.5 * np.log(2 * np.pi) - 0.5 * tf.math.log(self.variance) - 0.5 * (
-                    (Y - Fmu) ** 2 + Fvar) / self.variance
+                (Y - Fmu) ** 2 + Fvar) / self.variance

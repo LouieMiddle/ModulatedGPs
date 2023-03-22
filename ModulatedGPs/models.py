@@ -1,7 +1,12 @@
 import numpy as np
 import tensorflow as tf
 import tensorflow_probability as tfp
-from gpflow import config, Module
+from check_shapes import inherit_check_shapes
+from gpflow import config, Module, covariances, default_jitter, posteriors
+from gpflow.base import TensorType, MeanAndVariance
+from gpflow.conditionals import base_conditional
+from gpflow.models import SVGP
+from gpflow.posteriors import IndependentPosterior
 
 from .broadcasting_lik import BroadcastingLikelihood
 from .utils import reparameterize
@@ -32,7 +37,7 @@ class SGP(Module):
         return tf.tile(X[None, :, :], [S, 1, 1]), None
 
     def propagate(self, Xt, full_cov=False):
-        Fmean, Fvar = self.pred_layer.predict_f(Xt, full_cov=full_cov)
+        Fmean, Fvar = self.pred_layer.predict_f(Xt, full_cov=True)
         return Fmean, Fvar
 
     def _build_predict(self, Xt, full_cov=False):
@@ -56,7 +61,7 @@ class SMGP(SGP):
         self.K = K
 
     def propagate_logassign(self, Xt, full_cov=False):
-        logassign_mean, logassign_var = self.assign_layer.predict_f(Xt, full_cov=full_cov)
+        logassign_mean, logassign_var = self.assign_layer.predict_f(Xt, full_cov=True)
         return logassign_mean, logassign_var
 
     def _build_predict_logassign(self, Xt, full_cov=False):
@@ -73,7 +78,10 @@ class SMGP(SGP):
 
     def E_log_p_Y(self, Xt, Y, W_SND):
         Fmean, Fvar = self._build_predict(Xt, full_cov=False)
-        var_exp = self.likelihood.variational_expectations(Xt, Fmean, Fvar, Y)
+        # print("Fmean is a: ", Fmean)
+        # print("Fvar is a: ", Fvar)
+        # TODO: Fmean and Fvar are different between the two
+        var_exp = self.likelihood.variational_expectations([], Fmean, Fvar, Y)
         # TODO: nans are introduced here
         var_exp *= tf.cast(W_SND, dtype=float_type)
         return tf.reduce_logsumexp(tf.reduce_sum(var_exp, 2), 0) - np.log(self.num_samples)
@@ -109,3 +117,38 @@ class SMGP(SGP):
         samples_f = reparameterize(Fmean, Fvar, z)
         samples_f = tf.reduce_sum(samples_f * W_SND, 2, keepdims=True)
         return samples_y, samples_f
+
+
+class IndependentPosteriorSingleOutputModified(IndependentPosterior):
+    # could almost be the same as IndependentPosteriorMultiOutput ...
+    @inherit_check_shapes
+    def _conditional_fused(
+            self, Xnew: TensorType, full_cov: bool = False, full_output_cov: bool = False
+    ) -> MeanAndVariance:
+        # same as IndependentPosteriorMultiOutput, Shared~/Shared~ branch, except for following
+        # line:
+        Knn = self.kernel(Xnew, full_cov=full_cov)
+
+        Kmm = covariances.Kuu(self.X_data, self.kernel, jitter=default_jitter())  # [M, M]
+        Kmn = self.kernel.K(self.X_data.Z, Xnew)
+
+        fmean, fvar = base_conditional(
+            Kmn, Kmm, Knn, self.q_mu, full_cov=full_cov, q_sqrt=self.q_sqrt, white=self.whiten
+        )  # [N, P],  [P, N, N] or [N, P]
+        return self._post_process_mean_and_cov(fmean, fvar, full_cov, full_output_cov)
+
+
+class SVGPModified(SVGP):
+    def posterior(
+            self,
+            precompute_cache: posteriors.PrecomputeCacheType = posteriors.PrecomputeCacheType.TENSOR,
+    ) -> posteriors.BasePosterior:
+        return IndependentPosteriorSingleOutputModified(
+            self.kernel,
+            self.inducing_variable,
+            self.q_mu,
+            self.q_sqrt,
+            whiten=self.whiten,
+            mean_function=self.mean_function,
+            precompute_cache=precompute_cache,
+        )

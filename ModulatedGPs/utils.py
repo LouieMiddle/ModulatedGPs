@@ -52,19 +52,19 @@ def load_categorical_data():
     return N, Xtrain, Ytrain, Xtest
 
 
-def load_multimodal_data():
+def load_multimodal_data(rng: np.random.Generator):
     N, Ns = 3000, 500
 
-    epsilon = np.random.normal(0, 0.005, (N // 3, 1))
+    # epsilon = rng.normal(0, 0.005, (N // 3, 1))
 
-    Xtrain = np.random.uniform(low=-2 * np.pi, high=2 * np.pi, size=(N, 1))
+    Xtrain = rng.uniform(low=-2 * np.pi, high=2 * np.pi, size=(N, 1))
 
-    Ytrain1 = np.sin(Xtrain[0:N // 3]) + epsilon
-    Ytrain2 = np.sin(Xtrain[N // 3:2 * N // 3]) - 2 * np.exp(-0.5 * pow(Xtrain[N // 3:2 * N // 3] - 2, 2)) + epsilon
-    Ytrain3 = -2 - (3 / (8 * np.pi)) * Xtrain[2 * N // 3:N] + (3 / 10) * np.sin(2 * Xtrain[2 * N // 3:N]) + epsilon
-    # Ytrain1 = np.sin(Xtrain[0:N // 3])
-    # Ytrain2 = np.sin(Xtrain[N // 3:2 * N // 3]) - 2 * np.exp(-0.5 * pow(Xtrain[N // 3:2 * N // 3] - 2, 2))
-    # Ytrain3 = -2 - (3 / (8 * np.pi)) * Xtrain[2 * N // 3:N] + (3 / 10) * np.sin(2 * Xtrain[2 * N // 3:N])
+    # Ytrain1 = np.sin(Xtrain[0:N // 3]) + epsilon
+    # Ytrain2 = np.sin(Xtrain[N // 3:2 * N // 3]) - 2 * np.exp(-0.5 * pow(Xtrain[N // 3:2 * N // 3] - 2, 2)) + epsilon
+    # Ytrain3 = -2 - (3 / (8 * np.pi)) * Xtrain[2 * N // 3:N] + (3 / 10) * np.sin(2 * Xtrain[2 * N // 3:N]) + epsilon
+    Ytrain1 = np.sin(Xtrain[0:N // 3])
+    Ytrain2 = np.sin(Xtrain[N // 3:2 * N // 3]) - 2 * np.exp(-0.5 * pow(Xtrain[N // 3:2 * N // 3] - 2, 2))
+    Ytrain3 = -2 - (3 / (8 * np.pi)) * Xtrain[2 * N // 3:N] + (3 / 10) * np.sin(2 * Xtrain[2 * N // 3:N])
     Ytrain = np.concatenate((Ytrain1, Ytrain2, Ytrain3))
 
     Xtest = np.linspace(-2 * np.pi, 2 * np.pi, Ns)[:, None]

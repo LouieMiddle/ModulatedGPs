@@ -2,12 +2,11 @@ import gpflow.kernels
 import matplotlib.colors as mcolors
 import numpy as np
 import tensorflow as tf
-from gpflow.likelihoods import Gaussian
 from matplotlib import pyplot as plt
 from scipy.cluster.vq import kmeans
 
-# from ModulatedGPs.likelihoods import Gaussian
-from ModulatedGPs.models import SMGP
+from ModulatedGPs.likelihoods import Gaussian
+from ModulatedGPs.models import SMGP, SVGPModified
 from ModulatedGPs.utils import load_multimodal_data, load_categorical_data, load_data_assoc
 
 print(tf.test.is_built_with_cuda())
@@ -16,11 +15,11 @@ print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 colors = [mcolors.TABLEAU_COLORS[key] for key in mcolors.TABLEAU_COLORS.keys()]
 
 seed = 0
-np.random.seed(seed)
 tf.random.set_seed(seed)
+rng = np.random.default_rng(seed=0)
 
 # N, Xtrain, Ytrain, Xtest = load_categorical_data()
-N, Xtrain, Ytrain, Xtest = load_multimodal_data()
+N, Xtrain, Ytrain, Xtest = load_multimodal_data(rng)
 # N, Xtrain, Ytrain, Xtest = load_data_assoc()
 
 # plt.scatter(Xtrain, Ytrain)
@@ -38,23 +37,15 @@ dimY = 1  # Output dimensions
 num_ind = 25  # Inducing size for f
 K = 3
 
-lik = Gaussian(variance=1.0 * np.ones((1, K)))
+lik = Gaussian(D=K)
 
 input_dim = dimX
 pred_kernel = gpflow.kernels.SquaredExponential(variance=0.5, lengthscales=0.5)
 assign_kernel = gpflow.kernels.SquaredExponential(variance=0.1, lengthscales=1.0)
-Z, Z_assign = kmeans(Xtrain, num_ind)[0], kmeans(Xtrain, num_ind)[0]
+Z, Z_assign = kmeans(Xtrain, num_ind, seed=0)[0], kmeans(Xtrain, num_ind, seed=1)[0]
 
-# pred_layer = gpflow.models.SVGP(kernel=pred_kernel, likelihood=lik, inducing_variable=Z, num_latent_gps=K)
-# assign_layer = gpflow.models.SVGP(kernel=assign_kernel, likelihood=lik, inducing_variable=Z_assign, num_latent_gps=K)
-
-# TODO: I believe the problem is somehow to do with how the likelihood was used before
-#  Before the model took in the likelihood and the layers took in no likelihood.
-#  My hunch is the broadcasting likelihood somehow is broadcasting values around to the layers?
-#  But it is not obvious....
-
-pred_layer = gpflow.models.SVGP(kernel=pred_kernel, likelihood=lik, inducing_variable=Z, num_latent_gps=K)
-assign_layer = gpflow.models.SVGP(kernel=assign_kernel, likelihood=lik, inducing_variable=Z_assign, num_latent_gps=K)
+pred_layer = SVGPModified(kernel=pred_kernel, likelihood=lik, inducing_variable=Z, num_latent_gps=K, whiten=True)
+assign_layer = SVGPModified(kernel=assign_kernel, likelihood=lik, inducing_variable=Z_assign, num_latent_gps=K, whiten=True)
 
 # model definition
 model = SMGP(likelihood=lik, pred_layer=pred_layer, assign_layer=assign_layer, K=K, num_samples=num_samples,
@@ -68,13 +59,9 @@ elbos = []
 for i in range(1, num_iter + 1):
     try:
         with tf.GradientTape() as tape:
-            if i == 377:
-                print("here")
             # Record gradients of the loss with respect to the trainable variables
             elbo = model._build_likelihood(Xtrain, Ytrain)
             loss_value = -elbo
-            # if i > 300:
-            #     print("iter ", i, ": ", elbo)
             gradients = tape.gradient(loss_value, model.trainable_variables)
 
         # Use the optimizer to apply the gradients to update the trainable variables
