@@ -28,7 +28,7 @@ N, Xtrain, Ytrain, Xtest = load_multimodal_data(rng)
 # Model configuration
 num_iter = 1000  # Optimization iterations
 lr = 0.005  # Learning rate for Adam opt
-num_minibatch = N  # Batch size for stochastic opt
+num_minibatch = 500  # Batch size for stochastic opt
 num_samples = 25  # Number of MC samples
 num_predict_samples = 100  # Number of prediction samples
 num_data = Xtrain.shape[0]  # Training size
@@ -42,14 +42,21 @@ lik = Gaussian(D=K)
 input_dim = dimX
 pred_kernel = gpflow.kernels.SquaredExponential(variance=0.5, lengthscales=0.5)
 assign_kernel = gpflow.kernels.SquaredExponential(variance=0.1, lengthscales=1.0)
-Z, Z_assign = kmeans(Xtrain, num_ind, seed=0)[0], kmeans(Xtrain, num_ind, seed=1)[0]
+# Z, Z_assign = kmeans(Xtrain, num_ind, seed=0)[0], kmeans(Xtrain, num_ind, seed=1)[0]
+Z, Z_assign = rng.uniform(-2 * np.pi, 2 * np.pi, size=(num_ind, 1)), rng.uniform(-2 * np.pi, 2 * np.pi,
+                                                                                 size=(num_ind, 1))
 
 pred_layer = SVGPModified(kernel=pred_kernel, likelihood=lik, inducing_variable=Z, num_latent_gps=K, whiten=True)
-assign_layer = SVGPModified(kernel=assign_kernel, likelihood=lik, inducing_variable=Z_assign, num_latent_gps=K, whiten=True)
+assign_layer = SVGPModified(kernel=assign_kernel, likelihood=lik, inducing_variable=Z_assign, num_latent_gps=K,
+                            whiten=True)
 
 # model definition
 model = SMGP(likelihood=lik, pred_layer=pred_layer, assign_layer=assign_layer, K=K, num_samples=num_samples,
              num_data=num_data)
+
+dataset = tf.data.Dataset.from_tensor_slices((Xtrain, Ytrain))
+dataset = dataset.shuffle(buffer_size=num_data)
+dataset = dataset.batch(num_minibatch)
 
 optimizer = tf.optimizers.Adam(lr)
 
@@ -58,20 +65,22 @@ iters = []
 elbos = []
 for i in range(1, num_iter + 1):
     try:
-        with tf.GradientTape() as tape:
-            # Record gradients of the loss with respect to the trainable variables
-            elbo = model._build_likelihood(Xtrain, Ytrain)
-            loss_value = -elbo
-            gradients = tape.gradient(loss_value, model.trainable_variables)
+        for x_batch, y_batch in dataset:
 
-        # Use the optimizer to apply the gradients to update the trainable variables
-        optimizer.apply_gradients(zip(gradients, model.trainable_variables))
+                with tf.GradientTape() as tape:
+                    # Record gradients of the loss with respect to the trainable variables
+                    elbo = model._build_likelihood(x_batch, y_batch)
+                    loss_value = -elbo
+                    gradients = tape.gradient(loss_value, model.trainable_variables)
 
-        if i % 100 == 0 or i == 0:
-            print('{:>5d}'.format(i) + '{:>24.6f}'.format(elbo))
-            # gpflow.utilities.print_summary(model)
-            iters.append(i)
-            elbos.append(elbo)
+                # Use the optimizer to apply the gradients to update the trainable variables
+                optimizer.apply_gradients(zip(gradients, model.trainable_variables))
+
+                if i % 100 == 0 or i == 0:
+                    print('{:>5d}'.format(i) + '{:>24.6f}'.format(elbo))
+                    # gpflow.utilities.print_summary(model)
+                    iters.append(i)
+                    elbos.append(elbo)
     except KeyboardInterrupt as e:
         print("stopping training")
         break
@@ -84,8 +93,8 @@ for X_batch in np.array_split(Xtest, n_batches):
     Ss_f.append(samples_f)
 samples_y, samples_f = np.hstack(Ss_y), np.hstack(Ss_f)
 mu_avg, fmu_avg = np.mean(samples_y, 0), np.mean(samples_f, 0)
-samples_y_stack = np.reshape(samples_y, (num_predict_samples*Xtest.shape[0], -1))
-samples_f_stack = np.reshape(samples_f, (num_predict_samples*Xtest.shape[0], -1))
+samples_y_stack = np.reshape(samples_y, (num_predict_samples * Xtest.shape[0], -1))
+samples_f_stack = np.reshape(samples_f, (num_predict_samples * Xtest.shape[0], -1))
 Xt_tiled = np.tile(Xtest, [num_predict_samples, 1])
 
 f, ax = plt.subplots(2, 2, figsize=(14, 8))
