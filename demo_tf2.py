@@ -16,7 +16,7 @@ colors = [mcolors.TABLEAU_COLORS[key] for key in mcolors.TABLEAU_COLORS.keys()]
 
 seed = 0
 tf.random.set_seed(seed)
-rng = np.random.default_rng(seed=0)
+rng = np.random.default_rng(seed=seed)
 
 # N, Xtrain, Ytrain, Xtest = load_categorical_data()
 N, Xtrain, Ytrain, Xtest = load_multimodal_data(rng)
@@ -55,7 +55,7 @@ model = SMGP(likelihood=lik, pred_layer=pred_layer, assign_layer=assign_layer, K
              num_data=num_data)
 
 dataset = tf.data.Dataset.from_tensor_slices((Xtrain, Ytrain))
-dataset = dataset.shuffle(buffer_size=num_data)
+dataset = dataset.shuffle(buffer_size=num_data, seed=seed)
 dataset = dataset.batch(num_minibatch)
 
 optimizer = tf.optimizers.Adam(lr)
@@ -66,21 +66,20 @@ elbos = []
 for i in range(1, num_iter + 1):
     try:
         for x_batch, y_batch in dataset:
+            with tf.GradientTape() as tape:
+                # Record gradients of the loss with respect to the trainable variables
+                elbo = model._build_likelihood(x_batch, y_batch)
+                loss_value = -elbo
+                gradients = tape.gradient(loss_value, model.trainable_variables)
 
-                with tf.GradientTape() as tape:
-                    # Record gradients of the loss with respect to the trainable variables
-                    elbo = model._build_likelihood(x_batch, y_batch)
-                    loss_value = -elbo
-                    gradients = tape.gradient(loss_value, model.trainable_variables)
+            # Use the optimizer to apply the gradients to update the trainable variables
+            optimizer.apply_gradients(zip(gradients, model.trainable_variables))
 
-                # Use the optimizer to apply the gradients to update the trainable variables
-                optimizer.apply_gradients(zip(gradients, model.trainable_variables))
-
-                if i % 100 == 0 or i == 0:
-                    print('{:>5d}'.format(i) + '{:>24.6f}'.format(elbo))
-                    # gpflow.utilities.print_summary(model)
-                    iters.append(i)
-                    elbos.append(elbo)
+            if i % 5 == 0 or i == 0:
+                print('{:>5d}'.format(i) + '{:>24.6f}'.format(elbo))
+                # gpflow.utilities.print_summary(model)
+                iters.append(i)
+                elbos.append(elbo)
     except KeyboardInterrupt as e:
         print("stopping training")
         break
