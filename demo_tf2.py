@@ -26,7 +26,7 @@ N, Xtrain, Ytrain, Xtest = load_multimodal_data(rng)
 # plt.show()
 
 # Model configuration
-num_iter = 1000  # Optimization iterations
+num_iter = 10000  # Optimization iterations
 lr = 0.005  # Learning rate for Adam opt
 num_minibatch = 500  # Batch size for stochastic opt
 num_samples = 25  # Number of MC samples
@@ -55,7 +55,7 @@ model = SMGP(likelihood=lik, pred_layer=pred_layer, assign_layer=assign_layer, K
              num_data=num_data)
 
 dataset = tf.data.Dataset.from_tensor_slices((Xtrain, Ytrain))
-dataset = dataset.shuffle(buffer_size=num_data, seed=seed)
+# dataset = dataset.shuffle(buffer_size=num_data, seed=seed)
 dataset = dataset.batch(num_minibatch)
 
 optimizer = tf.optimizers.Adam(lr)
