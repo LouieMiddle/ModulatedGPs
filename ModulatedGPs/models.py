@@ -78,14 +78,11 @@ class SMGP(SGP):
 
     def E_log_p_Y(self, Xt, Y, W_SND):
         Fmean, Fvar = self._build_predict(Xt, full_cov=False)
-        # print("Fmean is a: ", Fmean)
-        # print("Fvar is a: ", Fvar)
-        # TODO: Fmean and Fvar are different between the two
         var_exp = self.likelihood.variational_expectations([], Fmean, Fvar, Y)
-        # TODO: nans are introduced here
         var_exp *= tf.cast(W_SND, dtype=float_type)
         return tf.reduce_logsumexp(tf.reduce_sum(var_exp, 2), 0) - np.log(self.num_samples)
 
+    @tf.function
     def _build_likelihood(self, X, Y):
         Xt = self.integrate(X, self.num_samples)[0]
         # sample from q(w)

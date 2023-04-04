@@ -26,7 +26,7 @@ N, Xtrain, Ytrain, Xtest = load_multimodal_data(rng)
 # plt.show()
 
 # Model configuration
-num_iter = 10000  # Optimization iterations
+num_iter = 6000  # Optimization iterations
 lr = 0.005  # Learning rate for Adam opt
 num_minibatch = 500  # Batch size for stochastic opt
 num_samples = 25  # Number of MC samples
