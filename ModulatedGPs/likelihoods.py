@@ -1,168 +1,63 @@
-# Borrowed and modified from: https://github.com/GPflow/GPflow/
+from typing import Optional, Any
 
-from .param import Param
-
+import gpflow.utilities
 import numpy as np
 import tensorflow as tf
-
 from gpflow import logdensities
-from gpflow import priors
-from gpflow import settings
-from gpflow import transforms
-from gpflow.quadrature import hermgauss
-from gpflow.quadrature import ndiagquad, ndiag_mc
+from gpflow.base import TensorType, MeanAndVariance, Parameter
+from gpflow.likelihoods import ScalarLikelihood
+from gpflow.utilities.parameter_or_function import ConstantOrFunction, ParameterOrFunction, \
+    prepare_parameter_or_function
+import tensorflow_probability as tfp
 
 
-class Likelihood:
-    def __init__(self, *args, **kwargs):
-        self.num_gauss_hermite_points = 20
+class Gaussian(ScalarLikelihood):
+    r"""
+    The Gaussian likelihood is appropriate where uncertainties associated with
+    the data are believed to follow a normal distribution, with constant
+    variance.
 
-    def predict_mean_and_var(self, Fmu, Fvar):
-        r"""
-        Given a Normal distribution for the latent function,
-        return the mean of Y
+    Very small uncertainties can lead to numerical instability during the
+    optimization process. A lower bound of 1e-6 is therefore imposed on the
+    likelihood variance by default.
+    """
 
-        if
-            q(f) = N(Fmu, Fvar)
-
-        and this object represents
-
-            p(y|f)
-
-        then this method computes the predictive mean
-
-           \int\int y p(y|f)q(f) df dy
-
-        and the predictive variance
-
-           \int\int y^2 p(y|f)q(f) df dy  - [ \int\int y p(y|f)q(f) df dy ]^2
-
-        Here, we implement a default Gauss-Hermite quadrature routine, but some
-        likelihoods (e.g. Gaussian) will implement specific cases.
+    def __init__(
+            self,
+            variance=1e-0,
+            D: int = None,
+            **kwargs: Any,
+    ) -> None:
         """
-        integrand2 = lambda *X: self.conditional_variance(*X) + tf.square(self.conditional_mean(*X))
-        E_y, E_y2 = ndiagquad([self.conditional_mean, integrand2],
-                              self.num_gauss_hermite_points,
-                              Fmu, Fvar)
-        V_y = E_y2 - tf.square(E_y)
-        return E_y, V_y
-
-    def predict_density(self, Fmu, Fvar, Y):
-        r"""
-        Given a Normal distribution for the latent function, and a datum Y,
-        compute the log predictive density of Y.
-
-        i.e. if
-            q(f) = N(Fmu, Fvar)
-
-        and this object represents
-
-            p(y|f)
-
-        then this method computes the predictive density
-
-            \log \int p(y=Y|f)q(f) df
-
-        Here, we implement a default Gauss-Hermite quadrature routine, but some
-        likelihoods (Gaussian, Poisson) will implement specific cases.
+        :param variance: The noise variance;
+        :param kwargs: Keyword arguments forwarded to :class:`ScalarLikelihood`.
         """
-        return ndiagquad(self.logp,
-                         self.num_gauss_hermite_points,
-                         Fmu, Fvar, logspace=True, Y=Y)
-
-    def variational_expectations(self, Fmu, Fvar, Y):
-        r"""
-        Compute the expected log density of the data, given a Gaussian
-        distribution for the function values.
-
-        if
-            q(f) = N(Fmu, Fvar)
-
-        and this object represents
-
-            p(y|f)
-
-        then this method computes
-
-           \int (\log p(y|f)) q(f) df.
-
-
-        Here, we implement a default Gauss-Hermite quadrature routine, but some
-        likelihoods (Gaussian, Poisson) will implement specific cases.
-        """
-        return ndiagquad(self.logp,
-                         self.num_gauss_hermite_points,
-                         Fmu, Fvar, Y=Y)
-
-
-class Gaussian(Likelihood):
-    def __init__(self, variance=1e-0, D=None, **kwargs):
         super().__init__(**kwargs)
-        if D is not None: # allow different noises for outputs
-            variance = variance * np.ones((1,D))
-        self.variance = Param(variance, transform=transforms.Log1pe(),name = "noise_variance")()
 
-    def logp(self, F, Y):
+        if D is not None:
+            variance = variance * np.ones((1, D))
+
+        variance = np.maximum(variance - 1e-6, np.finfo(np.float64).eps)
+        variance = variance + np.log(-np.expm1(-variance))
+        self.variance: Optional[ParameterOrFunction] = Parameter(variance, transform=gpflow.utilities.positive())
+
+    def _scalar_log_prob(self, X: TensorType, F: TensorType, Y: TensorType) -> tf.Tensor:
         return logdensities.gaussian(Y, F, self.variance)
 
-    def conditional_mean(self, F):  # pylint: disable=R0201
+    def _conditional_mean(self, X: TensorType, F: TensorType) -> tf.Tensor:  # pylint: disable=R0201
         return tf.identity(F)
 
-    def conditional_variance(self, F):
-        return tf.fill(tf.shape(F), tf.squeeze(self.variance))
+    def _conditional_variance(self, X: TensorType, F: TensorType) -> tf.Tensor:
+        shape = tf.shape(F)
+        return tf.broadcast_to(self.variance, shape)
 
-    def predict_mean_and_var(self, Fmu, Fvar):
+    def _predict_mean_and_var(self, X: TensorType, Fmu: TensorType, Fvar: TensorType) -> MeanAndVariance:
         return tf.identity(Fmu), Fvar + self.variance
 
-    def predict_density(self, Fmu, Fvar, Y):
-        return logdensities.gaussian(Y, Fmu, Fvar + self.variance)
+    def _predict_log_density(self, X: TensorType, Fmu: TensorType, Fvar: TensorType, Y: TensorType) -> tf.Tensor:
+        return tf.reduce_sum(logdensities.gaussian(Y, Fmu, Fvar + self.variance), axis=-1)
 
-    def variational_expectations(self, Fmu, Fvar, Y):
-        return -0.5 * np.log(2 * np.pi) - 0.5 * tf.log(self.variance) - 0.5 * (tf.square(Y - Fmu) + Fvar) / self.variance
-
-
-def inv_probit(x):
-    jitter = 1e-3  # ensures output is strictly between 0 and 1
-    return 0.5 * (1.0 + tf.erf(x / np.sqrt(2.0))) * (1 - 2 * jitter) + jitter
-
-
-class Bernoulli(Likelihood):
-    def __init__(self, invlink=inv_probit, **kwargs):
-        super().__init__(**kwargs)
-        self.invlink = invlink
-
-    def logp(self, F, Y):
-        return logdensities.bernoulli(Y, self.invlink(F))
-
-    def predict_mean_and_var(self, Fmu, Fvar):
-        if self.invlink is inv_probit:
-            p = inv_probit(Fmu / tf.sqrt(1 + Fvar))
-            return p, p - tf.square(p)
-        else:
-            # for other invlink, use quadrature
-            return super().predict_mean_and_var(Fmu, Fvar)
-
-    def predict_density(self, Fmu, Fvar, Y):
-        p = self.predict_mean_and_var(Fmu, Fvar)[0]
-        return logdensities.bernoulli(Y, p)
-
-    def conditional_mean(self, F):
-        return self.invlink(F)
-
-    def conditional_variance(self, F):
-        p = self.conditional_mean(F)
-        return p - tf.square(p)
-
-class HeteroGaussian(Likelihood):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.c = Param(1., transform=transforms.Log1pe(), name="para_c")()
-
-    def predict_mean_and_var(self, Fmu, Fvar, Gmu, Gvar):
-        raise NotImplementedError
-
-    def variational_expectations(self, Fmu, Fvar, Gmu, Gvar, Y):
-        Rg_3, Rg_4 = tf.exp(2.*Gvar - 2.*Gmu), tf.exp(0.5 * Gvar - Gmu)
-        ve = -0.5 * np.log(2 * np.pi) - 0.5 * tf.log(self.c) - Gmu \
-                - 0.5 * (Y**2 * Rg_3 - 2. * Y * Rg_4 * Fmu + Fmu**2 + Fvar) / self.c
-        return ve
+    # NOTE: Even though the SVGP elbo uses this, it's never called from the SMGP model
+    def _variational_expectations(self, X: TensorType, Fmu: TensorType, Fvar: TensorType, Y: TensorType) -> tf.Tensor:
+        return -0.5 * np.log(2 * np.pi) - 0.5 * tf.math.log(self.variance) - 0.5 * (
+                (Y - Fmu) ** 2 + Fvar) / self.variance
