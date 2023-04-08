@@ -37,15 +37,20 @@ def reparameterize(mean, var, z, full_cov=False):
         return tf.transpose(f, (0, 2, 1))  # SND
 
 
-def load_categorical_data():
-    N, Ns, lambda_ = 600, 100, 0.1
+def inv_probit(x: tf.Tensor) -> tf.Tensor:
+    jitter = 1e-3  # ensures output is strictly between 0 and 1
+    return 0.5 * (1.0 + tf.math.erf(x / np.sqrt(2.0))) * (1 - 2 * jitter) + jitter
+
+
+def load_categorical_data(rng: np.random.Generator):
+    N, Ns, lambda_ = 500, 100, 0.1
 
     x_min = -6.0
     x_max = 6.0
-    Xtrain = np.random.uniform(low=x_min, high=x_max, size=(N, 1))
+    Xtrain = rng.uniform(low=x_min, high=x_max, size=(N, 1))
 
-    Ytrain = np.where(Xtrain < 0.0, 1.0, 0.0)
-    outlier_indices = np.random.choice(N, size=int(N * lambda_), replace=False)
+    Ytrain = np.where(Xtrain < 0.0, 1, 0)
+    outlier_indices = rng.choice(N, size=int(N * lambda_), replace=False)
     Ytrain[outlier_indices] = 1 - Ytrain[outlier_indices]
 
     Xtest = np.linspace(x_min, x_max, Ns).reshape(Ns, 1)
@@ -112,17 +117,17 @@ def load_2d_data(rng: np.random.Generator):
 
 
 def load_2d_data_categorical(rng: np.random.Generator):
-    N, Ns, lambda_ = 3000, 500, 0.1
+    N, Ns, lambda_ = 500, 100, 0.1
 
     xz_min = [-6.0, -6.0]
     xz_max = [6.0, 6.0]
     Xtrain = rng.uniform(low=xz_min, high=xz_max, size=(N, 2))
 
-    Ytrain = np.where(Xtrain < [0.0, 0.0], 1.0, 0.0)
+    Ytrain = np.where(Xtrain < [0.0, 0.0], 1, 0)
 
     # to add occasional outliers
     outlier_indices = rng.choice(N, size=int(N * lambda_), replace=False)
-    Ytrain[outlier_indices] = 1.0 - Ytrain[outlier_indices]
+    Ytrain[outlier_indices] = 1 - Ytrain[outlier_indices]
 
     Ytrain = Ytrain[:, 0:1]
 

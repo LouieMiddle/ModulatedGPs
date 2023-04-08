@@ -5,7 +5,7 @@ import tensorflow as tf
 from matplotlib import pyplot as plt
 from scipy.cluster.vq import kmeans
 
-from ModulatedGPs.likelihoods import Gaussian
+from ModulatedGPs.likelihoods import Gaussian, Bernoulli
 from ModulatedGPs.models import SMGP, SVGPModified
 from ModulatedGPs.utils import load_multimodal_data, load_categorical_data, load_data_assoc
 
@@ -18,11 +18,9 @@ seed = 0
 tf.random.set_seed(seed)
 rng = np.random.default_rng(seed=seed)
 
-# N, Xtrain, Ytrain, Xtest = load_categorical_data(rng)
-N, Xtrain, Ytrain, Xtest = load_multimodal_data(rng)
+N, Xtrain, Ytrain, Xtest = load_categorical_data(rng)
+# N, Xtrain, Ytrain, Xtest = load_multimodal_data(rng)
 # N, Xtrain, Ytrain, Xtest = load_data_assoc(rng)
-# N, Xtrain, Ytrain, Xtest = load_2d_data_categorical(rng)
-# N, Xtrain, Ytrain, Xtest = load_2d_data(rng)
 
 # plt.scatter(Xtrain, Ytrain)
 # plt.show()
@@ -37,9 +35,10 @@ num_data = Xtrain.shape[0]  # Training size
 dimX = Xtrain.shape[1]  # Input dimensions
 dimY = 1  # Output dimensions
 num_ind = 25  # Inducing size for f
-K = 3
+K = 2
 
-lik = Gaussian(D=K)
+lik = Bernoulli()
+lik2 = Gaussian(D=K)
 
 input_dim = dimX
 pred_kernel = gpflow.kernels.SquaredExponential(variance=0.5, lengthscales=0.5)
@@ -49,11 +48,11 @@ Z, Z_assign = kmeans(Xtrain, num_ind, seed=0)[0], kmeans(Xtrain, num_ind, seed=1
 #                                                                                  size=(num_ind, 1))
 
 pred_layer = SVGPModified(kernel=pred_kernel, likelihood=lik, inducing_variable=Z, num_latent_gps=K, whiten=True)
-assign_layer = SVGPModified(kernel=assign_kernel, likelihood=lik, inducing_variable=Z_assign, num_latent_gps=K,
+assign_layer = SVGPModified(kernel=assign_kernel, likelihood=lik2, inducing_variable=Z_assign, num_latent_gps=K,
                             whiten=True)
 
 # model definition
-model = SMGP(likelihood=lik, pred_layer=pred_layer, assign_layer=assign_layer, K=K, num_samples=num_samples,
+model = SMGP(likelihood=lik2, pred_layer=pred_layer, assign_layer=assign_layer, K=K, num_samples=num_samples,
              num_data=num_data)
 
 dataset = tf.data.Dataset.from_tensor_slices((Xtrain, Ytrain))
@@ -135,5 +134,5 @@ ax[1, 1].set_ylabel('Pred. of GP experts')
 ax[1, 1].grid()
 
 plt.tight_layout()
-plt.savefig('figs/demo_tf2.png')
+plt.savefig('figs/demo_tf2_bernoulli.png')
 plt.show()
