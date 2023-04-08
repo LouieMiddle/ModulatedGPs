@@ -92,9 +92,9 @@ def load_data_assoc():
 def load_2d_data(rng: np.random.Generator):
     N, Ns = 3000, 500
 
-    xz_min = [-6.0, -6.0]
-    xz_max = [6.0, 6.0]
-    Xtrain = rng.uniform(low=xz_min, high=xz_max, size=(N, 2))
+    x_min = [-6.0, -6.0]
+    x_max = [6.0, 6.0]
+    Xtrain = rng.uniform(low=x_min, high=x_max, size=(N, 2))
 
     # gaussian = np.exp(-((Xtrain[:, 0] - 0.5) ** 2 + (Xtrain[:, 1] - 0.5) ** 2) / (2 * 0.1 ** 2))
     # sine = np.sin(2 * np.pi * 5 * np.sqrt((Xtrain[:, 0] - 0.5) ** 2 + (Xtrain[:, 1] - 0.5) ** 2))
@@ -111,7 +111,7 @@ def load_2d_data(rng: np.random.Generator):
 
     Ytrain = np.concatenate((radial[0: N // 2], radial2[N // 2: N])).reshape((N, 1))
 
-    Xtest = np.linspace(xz_min, xz_max, Ns)
+    Xtest = np.linspace(x_min, x_max, Ns)
 
     return N, Xtrain, Ytrain, Xtest
 
@@ -119,18 +119,19 @@ def load_2d_data(rng: np.random.Generator):
 def load_2d_data_categorical(rng: np.random.Generator):
     N, Ns, lambda_ = 500, 100, 0.1
 
-    xz_min = [-6.0, -6.0]
-    xz_max = [6.0, 6.0]
-    Xtrain = rng.uniform(low=xz_min, high=xz_max, size=(N, 2))
+    x_min = [-6.0, -6.0]
+    x_max = [6.0, 6.0]
+    Xtrain = rng.uniform(low=x_min, high=x_max, size=(N, 2))
 
-    Ytrain = np.where(Xtrain < [0.0, 0.0], 1, 0)
+    Ytrain = np.where((Xtrain[:, 0] < 0) & (Xtrain[:, 1] < 0), 1, 0)
 
     # to add occasional outliers
     outlier_indices = rng.choice(N, size=int(N * lambda_), replace=False)
     Ytrain[outlier_indices] = 1 - Ytrain[outlier_indices]
 
-    Ytrain = Ytrain[:, 0:1]
+    # Ytrain = Ytrain[:, 0:1]
+    Ytrain = Ytrain.reshape((N, 1))
 
-    Xtest = np.linspace(xz_min, xz_max, Ns)
+    Xtest = np.linspace(x_min, x_max, Ns)
 
     return N, Xtrain, Ytrain, Xtest
