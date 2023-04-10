@@ -1,13 +1,54 @@
+import os
+
 import gpflow.kernels
 import matplotlib.colors as mcolors
 import numpy as np
+import pandas as pd
 import tensorflow as tf
 from matplotlib import pyplot as plt
 from scipy.cluster.vq import kmeans
+from sklearn.model_selection import train_test_split
 
 from ModulatedGPs.likelihoods import Gaussian, Bernoulli
 from ModulatedGPs.models import SMGP, SVGPModified
-from ModulatedGPs.utils import load_multimodal_data, load_categorical_data, load_data_assoc, load_2d_data_categorical
+
+
+def filter_by_pitch_x_pitch_y(data):
+    data = data[(data['pitchX'] >= -2) & (data['pitchX'] <= 2)]
+    data = data[(data['pitchY'] >= 0) & (data['pitchY'] <= 14)]
+    return data
+
+
+def load_csv_data_mipl():
+    csv_path = os.path.join("./", "mensIPLHawkeyeStats.csv")
+    return pd.read_csv(csv_path)
+
+
+mipl_csv = load_csv_data_mipl()
+mipl_csv = filter_by_pitch_x_pitch_y(mipl_csv)
+
+seam = ['FAST_SEAM', 'MEDIUM_SEAM', 'SEAM']
+mipl_csv = mipl_csv[mipl_csv['batter'] == 'Jos Buttler']
+mipl_csv = mipl_csv[mipl_csv['bowlingStyle'].isin(seam)]
+mipl_csv = mipl_csv[mipl_csv['rightArmedBowl'] == True]
+
+categorical_attributes = []
+numerical_attributes = ['stumpsX', 'stumpsY']
+# numerical_attributes = ['stumpsX', 'stumpsY', 'pitchX', 'pitchY']
+all_columns = numerical_attributes + ['runs']
+
+mipl_csv = mipl_csv[all_columns]
+mipl_csv = mipl_csv[(mipl_csv['runs'] == 0) | (mipl_csv['runs'] == 6)]
+mipl_csv = mipl_csv.tail(1000)
+
+features = mipl_csv.drop(['runs'], axis=1)
+targets = mipl_csv['runs']
+
+name = 'JosButtler_RightArmSeam_'
+
+Xtrain, Xtest, Ytrain, Ytest = train_test_split(features, targets, test_size=0.2)
+Xtrain, Xtest, Ytrain, Ytest = Xtrain.to_numpy(), Xtest.to_numpy(), Ytrain.to_numpy(), Ytest.to_numpy()
+Ytrain, Ytest = Ytrain.reshape((len(Ytrain), 1)), Ytest.reshape((len(Ytest), 1))
 
 print(tf.test.is_built_with_cuda())
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
@@ -18,15 +59,10 @@ seed = 0
 tf.random.set_seed(seed)
 rng = np.random.default_rng(seed=seed)
 
-# N, Xtrain, Ytrain, Xtest = load_categorical_data(rng)
-# N, Xtrain, Ytrain, Xtest = load_multimodal_data(rng)
-# N, Xtrain, Ytrain, Xtest = load_data_assoc(rng)
-N, Xtrain, Ytrain, Xtest = load_2d_data_categorical(rng)
-
-fig = plt.figure()
-ax = fig.add_subplot(projection='3d')
-ax.scatter(Xtrain[:, 0], Xtrain[:, 1], Ytrain, s=1)
-plt.show()
+# fig = plt.figure()
+# ax = fig.add_subplot(projection='3d')
+# ax.scatter(Xtrain[:, 0], Xtrain[:, 1], Ytrain, s=1)
+# plt.show()
 
 # Model configuration
 num_iter = 6000  # Optimization iterations
@@ -40,8 +76,8 @@ dimY = 1  # Output dimensions
 num_ind = 25  # Inducing size for f
 K = 2
 
-lik = Bernoulli()
-lik2 = Gaussian(D=K)
+bernoulli_lik = Bernoulli()
+gaussian_lik = Gaussian(D=K)
 
 input_dim = dimX
 pred_kernel = gpflow.kernels.SquaredExponential(variance=0.5, lengthscales=0.5)
@@ -50,12 +86,12 @@ Z, Z_assign = kmeans(Xtrain, num_ind, seed=0)[0], kmeans(Xtrain, num_ind, seed=1
 # Z, Z_assign = rng.uniform(-2 * np.pi, 2 * np.pi, size=(num_ind, 1)), rng.uniform(-2 * np.pi, 2 * np.pi,
 #                                                                                  size=(num_ind, 1))
 
-pred_layer = SVGPModified(kernel=pred_kernel, likelihood=lik, inducing_variable=Z, num_latent_gps=K, whiten=True)
-assign_layer = SVGPModified(kernel=assign_kernel, likelihood=lik2, inducing_variable=Z_assign, num_latent_gps=K,
+pred_layer = SVGPModified(kernel=pred_kernel, likelihood=bernoulli_lik, inducing_variable=Z, num_latent_gps=K, whiten=True)
+assign_layer = SVGPModified(kernel=assign_kernel, likelihood=gaussian_lik, inducing_variable=Z_assign, num_latent_gps=K,
                             whiten=True)
 
 # model definition
-model = SMGP(likelihood=lik2, pred_layer=pred_layer, assign_layer=assign_layer, K=K, num_samples=num_samples,
+model = SMGP(likelihood=gaussian_lik, pred_layer=pred_layer, assign_layer=assign_layer, K=K, num_samples=num_samples,
              num_data=num_data)
 
 dataset = tf.data.Dataset.from_tensor_slices((Xtrain, Ytrain))
@@ -163,4 +199,4 @@ ax[6].grid()
 
 plt.tight_layout()
 plt.show()
-fig.savefig('figs/demo_tf2_bernoulli_2d.png')
+fig.savefig('figs/demo_' + name + "_".join(numerical_attributes) + '.png')
