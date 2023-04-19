@@ -44,7 +44,7 @@ K = 3
 lik = Gaussian(D=K)
 
 input_dim = dimX
-pred_kernel = gpflow.kernels.SquaredExponential(variance=0.5, lengthscales=0.5)
+pred_kernel = gpflow.kernels.SquaredExponential(variance=0.01, lengthscales=1.0)
 assign_kernel = gpflow.kernels.SquaredExponential(variance=0.1, lengthscales=1.0)
 Z, Z_assign = kmeans(Xtrain, num_ind, seed=0)[0], kmeans(Xtrain, num_ind, seed=1)[0]
 # Z, Z_assign = rng.uniform(-2 * np.pi, 2 * np.pi, size=(num_ind, 1)), rng.uniform(-2 * np.pi, 2 * np.pi,
@@ -104,56 +104,63 @@ Xt_tiled = np.tile(Xtest, [num_predict_samples, 1])
 # Plotting results
 fig = plt.figure(figsize=(14, 8))
 ax = []
-for i in range(1, 7):
-    if i > 1:
-        ax.append(fig.add_subplot(3, 2, i))
+for i in range(1, 8):
+    if i > 2:
+        ax.append(fig.add_subplot(4, 2, i))
         continue
-    ax.append(fig.add_subplot(3, 2, i, projection='3d'))
+    ax.append(fig.add_subplot(4, 2, i, projection='3d'))
 
-ax[0].scatter(Xt_tiled[:, 0:1], Xt_tiled[:, 1:2], samples_y_stack.flatten(), marker='+', alpha=0.01,
-              color=mcolors.TABLEAU_COLORS['tab:red'])
-ax[0].scatter(Xt_tiled[:, 0:1], Xt_tiled[:, 1:2], samples_f_stack.flatten(), marker='+', alpha=0.01,
-              color=mcolors.TABLEAU_COLORS['tab:blue'])
-ax[0].scatter(Xtrain[:, 0], Xtrain[:, 1], Ytrain, marker='x', color='black', alpha=0.1)
-ax[0].set_title("Many GPs")
-ax[0].set_xlabel('x')
-ax[0].set_ylabel('y')
+ax[0].scatter(Xtrain[:, 0], Xtrain[:, 1], Ytrain, s=1)
+ax[0].set_title("Raw Data")
+ax[0].set_xlabel('x1')
+ax[0].set_ylabel('x2')
 ax[0].set_zlabel('z')
-ax[0].set_ylim(1.2 * min(Ytrain), 1.2 * max(Ytrain))
 ax[0].grid()
 
-ax[1].plot(iters, elbos, 'o-', ms=8, alpha=0.5)
-ax[1].set_xlabel('Iterations')
-ax[1].set_ylabel('ELBO')
+ax[1].scatter(Xt_tiled[:, 0:1], Xt_tiled[:, 1:2], samples_y_stack.flatten(), marker='+', alpha=0.01,
+              color=mcolors.TABLEAU_COLORS['tab:red'])
+ax[1].scatter(Xt_tiled[:, 0:1], Xt_tiled[:, 1:2], samples_f_stack.flatten(), marker='+', alpha=0.01,
+              color=mcolors.TABLEAU_COLORS['tab:blue'])
+ax[1].scatter(Xtrain[:, 0], Xtrain[:, 1], Ytrain, marker='x', color='black', alpha=0.1)
+ax[1].set_title("Many GPs")
+ax[1].set_xlabel('x1')
+ax[1].set_ylabel('x2')
+ax[1].set_zlabel('z')
+ax[1].set_ylim(1.2 * min(Ytrain), 1.2 * max(Ytrain))
 ax[1].grid()
 
-assign_ = model.predict_assign(Xtrain)
-ax[2].plot(Xtrain[:, 0], assign_, 'o')
-ax[3].plot(Xtrain[:, 1], assign_, 'o')
-ax[2].set_xlabel('x1')
-ax[2].set_ylabel('softmax(assignment)')
-ax[3].set_xlabel('x2')
-ax[3].set_ylabel('softmax(assignment)')
+ax[2].plot(iters, elbos, 'o-', ms=8, alpha=0.5)
+ax[2].set_xlabel('Iterations')
+ax[2].set_ylabel('ELBO')
 ax[2].grid()
+
+assign_ = model.predict_assign(Xtrain)
+ax[3].plot(Xtrain[:, 0], assign_, 'o')
+ax[4].plot(Xtrain[:, 1], assign_, 'o')
+ax[3].set_xlabel('x1')
+ax[3].set_ylabel('softmax(assignment)')
+ax[4].set_xlabel('x2')
+ax[4].set_ylabel('softmax(assignment)')
 ax[3].grid()
+ax[4].grid()
 
 fmean, fvar = model.predict_y(Xtest)
 fmean_, fvar_ = np.mean(fmean, 0), np.mean(fvar, 0)
 lb, ub = (fmean_ - 2 * fvar_ ** 0.5), (fmean_ + 2 * fvar_ ** 0.5)
 I = np.argmax(assign_, 1)
 for i in range(K):
-    ax[4].plot(Xtest[:, 0], fmean_[:, i], '-', alpha=1., color=colors[i])
-    ax[4].fill_between(Xtest[:, 0], lb[:, i], ub[:, i], alpha=0.3, color=colors[i])
-    ax[5].plot(Xtest[:, 1], fmean_[:, i], '-', alpha=1., color=colors[i])
-    ax[5].fill_between(Xtest[:, 1], lb[:, i], ub[:, i], alpha=0.3, color=colors[i])
-ax[4].scatter(Xtrain[:, 0], Ytrain, marker='x', color='black', alpha=0.5)
-ax[5].scatter(Xtrain[:, 1], Ytrain, marker='x', color='black', alpha=0.5)
-ax[4].set_xlabel('x1')
-ax[4].set_ylabel('Pred. of GP experts')
-ax[5].set_xlabel('x2')
+    ax[5].plot(Xtest[:, 0], fmean_[:, i], '-', alpha=1., color=colors[i])
+    ax[5].fill_between(Xtest[:, 0], lb[:, i], ub[:, i], alpha=0.3, color=colors[i])
+    ax[6].plot(Xtest[:, 1], fmean_[:, i], '-', alpha=1., color=colors[i])
+    ax[6].fill_between(Xtest[:, 1], lb[:, i], ub[:, i], alpha=0.3, color=colors[i])
+ax[5].scatter(Xtrain[:, 0], Ytrain, marker='x', color='black', alpha=0.5)
+ax[6].scatter(Xtrain[:, 1], Ytrain, marker='x', color='black', alpha=0.5)
+ax[5].set_xlabel('x1')
 ax[5].set_ylabel('Pred. of GP experts')
-ax[4].grid()
+ax[6].set_xlabel('x2')
+ax[6].set_ylabel('Pred. of GP experts')
 ax[5].grid()
+ax[6].grid()
 
 plt.tight_layout()
 plt.show()

@@ -35,13 +35,13 @@ num_data = Xtrain.shape[0]  # Training size
 dimX = Xtrain.shape[1]  # Input dimensions
 dimY = 1  # Output dimensions
 num_ind = 25  # Inducing size for f
-K = 2
+K = 3
 
 lik = Bernoulli()
 lik2 = Gaussian(D=K)
 
 input_dim = dimX
-pred_kernel = gpflow.kernels.SquaredExponential(variance=0.5, lengthscales=0.5)
+pred_kernel = gpflow.kernels.SquaredExponential(variance=0.01, lengthscales=1.0)
 assign_kernel = gpflow.kernels.SquaredExponential(variance=0.1, lengthscales=1.0)
 Z, Z_assign = kmeans(Xtrain, num_ind, seed=0)[0], kmeans(Xtrain, num_ind, seed=1)[0]
 # Z, Z_assign = rng.uniform(-2 * np.pi, 2 * np.pi, size=(num_ind, 1)), rng.uniform(-2 * np.pi, 2 * np.pi,

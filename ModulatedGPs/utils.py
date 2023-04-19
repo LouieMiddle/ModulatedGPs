@@ -2,6 +2,7 @@ import numpy as np
 import tensorflow as tf
 from gpflow import config
 from matplotlib import pyplot as plt
+from matplotlib.axes import Axes
 
 float_type = config.default_float()
 
@@ -90,7 +91,7 @@ def load_data_assoc():
 
 
 def load_2d_data(rng: np.random.Generator):
-    N, Ns = 3000, 500
+    N, Ns = 500, 100
 
     x_min = [-6.0, -6.0]
     x_max = [6.0, 6.0]
@@ -99,7 +100,7 @@ def load_2d_data(rng: np.random.Generator):
     # gaussian = np.exp(-((Xtrain[:, 0] - 0.5) ** 2 + (Xtrain[:, 1] - 0.5) ** 2) / (2 * 0.1 ** 2))
     # sine = np.sin(2 * np.pi * 5 * np.sqrt((Xtrain[:, 0] - 0.5) ** 2 + (Xtrain[:, 1] - 0.5) ** 2))
     radial = np.sqrt((Xtrain[:, 0] - 0.5) ** 2 + (Xtrain[:, 1] - 0.5) ** 2)
-    radial2 = np.sqrt((Xtrain[:, 0] - 0.5) ** 2 + (Xtrain[:, 1] - 0.5) ** 2) - 3.0
+    radial2 = np.sqrt((Xtrain[:, 0] - 0.5) ** 2 + (Xtrain[:, 1] - 0.5) ** 2) + 10.0
 
     # fig = plt.figure()
     # ax1, ax2 = fig.add_subplot(2, 1, 1, projection='3d'), fig.add_subplot(2, 1, 2, projection='3d')
@@ -135,3 +136,25 @@ def load_2d_data_categorical(rng: np.random.Generator):
     Xtest = np.linspace(x_min, x_max, Ns)
 
     return N, Xtrain, Ytrain, Xtest
+
+
+def plot_2d_kernel_samples(ax: Axes, svgp) -> None:
+    n_grid = 30
+
+    Xplots = np.linspace(-6.0, 6.0, n_grid)
+    Xplot1, Xplot2 = np.meshgrid(Xplots, Xplots)
+    Xplot = np.stack([Xplot1, Xplot2], axis=-1)
+    Xplot = Xplot.reshape([n_grid ** 2, 2])
+
+    tf.random.set_seed(20220903)
+    fs = svgp.predict_f_samples(Xplot, num_samples=1)
+    fs = fs[:, :, 0].numpy().reshape((n_grid, n_grid))
+    ax.plot_surface(Xplot1, Xplot2, fs)
+    ax.set_title("Example $f$")
+
+
+def plot_2d_kernel(svgp, Z) -> None:
+    _, (samples_ax, prediction_ax) = plt.subplots(
+        nrows=1, ncols=2, subplot_kw={"projection": "3d"}
+    )
+    plot_2d_kernel_samples(samples_ax, svgp)

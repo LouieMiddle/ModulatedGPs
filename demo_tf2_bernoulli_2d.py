@@ -7,7 +7,8 @@ from scipy.cluster.vq import kmeans
 
 from ModulatedGPs.likelihoods import Gaussian, Bernoulli
 from ModulatedGPs.models import SMGP, SVGPModified
-from ModulatedGPs.utils import load_multimodal_data, load_categorical_data, load_data_assoc, load_2d_data_categorical
+from ModulatedGPs.utils import load_multimodal_data, load_categorical_data, load_data_assoc, load_2d_data_categorical, \
+    plot_2d_kernel
 
 print(tf.test.is_built_with_cuda())
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
@@ -23,13 +24,13 @@ rng = np.random.default_rng(seed=seed)
 # N, Xtrain, Ytrain, Xtest = load_data_assoc(rng)
 N, Xtrain, Ytrain, Xtest = load_2d_data_categorical(rng)
 
-fig = plt.figure()
-ax = fig.add_subplot(projection='3d')
-ax.scatter(Xtrain[:, 0], Xtrain[:, 1], Ytrain, s=1)
-plt.show()
+# fig = plt.figure()
+# ax = fig.add_subplot(projection='3d')
+# ax.scatter(Xtrain[:, 0], Xtrain[:, 1], Ytrain, s=1)
+# plt.show()
 
 # Model configuration
-num_iter = 6000  # Optimization iterations
+num_iter = 500  # Optimization iterations
 lr = 0.005  # Learning rate for Adam opt
 num_minibatch = 500  # Batch size for stochastic opt
 num_samples = 25  # Number of MC samples
@@ -38,13 +39,13 @@ num_data = Xtrain.shape[0]  # Training size
 dimX = Xtrain.shape[1]  # Input dimensions
 dimY = 1  # Output dimensions
 num_ind = 25  # Inducing size for f
-K = 2
+K = 3
 
 lik = Bernoulli()
 lik2 = Gaussian(D=K)
 
 input_dim = dimX
-pred_kernel = gpflow.kernels.SquaredExponential(variance=0.5, lengthscales=0.5)
+pred_kernel = gpflow.kernels.SquaredExponential(variance=0.01, lengthscales=0.5)
 assign_kernel = gpflow.kernels.SquaredExponential(variance=0.1, lengthscales=1.0)
 Z, Z_assign = kmeans(Xtrain, num_ind, seed=0)[0], kmeans(Xtrain, num_ind, seed=1)[0]
 # Z, Z_assign = rng.uniform(-2 * np.pi, 2 * np.pi, size=(num_ind, 1)), rng.uniform(-2 * np.pi, 2 * np.pi,
@@ -87,6 +88,9 @@ for i in range(1, num_iter + 1):
     except KeyboardInterrupt as e:
         print("stopping training")
         break
+
+plot_2d_kernel(pred_layer, Z)
+plot_2d_kernel(assign_layer, Z_assign)
 
 n_batches = max(int(Xtest.shape[0] / 500), 1)
 Ss_y, Ss_f = [], []
