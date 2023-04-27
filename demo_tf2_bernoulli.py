@@ -7,7 +7,7 @@ from scipy.cluster.vq import kmeans
 
 from ModulatedGPs.likelihoods import Gaussian, Bernoulli
 from ModulatedGPs.models import SMGP, SVGPModified
-from ModulatedGPs.utils import load_multimodal_data, load_categorical_data, load_data_assoc
+from ModulatedGPs.utils import load_multimodal_data, load_categorical_data, load_data_assoc, plot_kernel
 
 print(tf.test.is_built_with_cuda())
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
@@ -26,7 +26,7 @@ N, Xtrain, Ytrain, Xtest = load_categorical_data(rng)
 # plt.show()
 
 # Model configuration
-num_iter = 6000  # Optimization iterations
+num_iter = 300  # Optimization iterations
 lr = 0.005  # Learning rate for Adam opt
 num_minibatch = 500  # Batch size for stochastic opt
 num_samples = 25  # Number of MC samples
@@ -37,8 +37,8 @@ dimY = 1  # Output dimensions
 num_ind = 25  # Inducing size for f
 K = 3
 
-lik = Bernoulli()
-lik2 = Gaussian(D=K)
+bernoulli_lik = Bernoulli()
+gaussian_lik = Gaussian(D=K)
 
 input_dim = dimX
 pred_kernel = gpflow.kernels.SquaredExponential(variance=0.01, lengthscales=1.0)
@@ -47,13 +47,15 @@ Z, Z_assign = kmeans(Xtrain, num_ind, seed=0)[0], kmeans(Xtrain, num_ind, seed=1
 # Z, Z_assign = rng.uniform(-2 * np.pi, 2 * np.pi, size=(num_ind, 1)), rng.uniform(-2 * np.pi, 2 * np.pi,
 #                                                                                  size=(num_ind, 1))
 
-pred_layer = SVGPModified(kernel=pred_kernel, likelihood=lik, inducing_variable=Z, num_latent_gps=K, whiten=True)
-assign_layer = SVGPModified(kernel=assign_kernel, likelihood=lik2, inducing_variable=Z_assign, num_latent_gps=K,
+pred_layer = SVGPModified(kernel=pred_kernel, likelihood=bernoulli_lik, inducing_variable=Z, num_latent_gps=K, whiten=True)
+assign_layer = SVGPModified(kernel=assign_kernel, likelihood=gaussian_lik, inducing_variable=Z_assign, num_latent_gps=K,
                             whiten=True)
 
 # model definition
-model = SMGP(likelihood=lik2, pred_layer=pred_layer, assign_layer=assign_layer, K=K, num_samples=num_samples,
+model = SMGP(likelihood=gaussian_lik, pred_layer=pred_layer, assign_layer=assign_layer, K=K, num_samples=num_samples,
              num_data=num_data)
+
+gpflow.utilities.print_summary(model)
 
 dataset = tf.data.Dataset.from_tensor_slices((Xtrain, Ytrain))
 dataset = dataset.shuffle(buffer_size=num_data, seed=seed)
@@ -84,6 +86,11 @@ for i in range(1, num_iter + 1):
     except KeyboardInterrupt as e:
         print("stopping training")
         break
+
+gpflow.utilities.print_summary(model)
+
+# plot_kernel(pred_layer)
+# plot_kernel(assign_layer)
 
 n_batches = max(int(Xtest.shape[0] / 500), 1)
 Ss_y, Ss_f = [], []

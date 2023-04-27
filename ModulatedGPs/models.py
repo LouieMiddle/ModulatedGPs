@@ -127,6 +127,7 @@ class IndependentPosteriorSingleOutputModified(IndependentPosterior):
 
         Kmm = covariances.Kuu(self.X_data, self.kernel, jitter=default_jitter())  # [M, M]
         # Same as IndependentPosteriorSingleOutput except for following line:
+        # This change was made to match the original ModulatedGPs
         Kmn = self.kernel.K(self.X_data.Z, Xnew)
 
         fmean, fvar = base_conditional(

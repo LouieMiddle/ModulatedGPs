@@ -12,6 +12,7 @@ from sklearn.model_selection import train_test_split
 from ModulatedGPs.likelihoods import Gaussian, Bernoulli
 from ModulatedGPs.models import SMGP, SVGPModified
 
+# TODO: Need to group boundaries and non boundaries together
 
 def filter_by_pitch_x_pitch_y(data):
     data = data[(data['pitchX'] >= -2) & (data['pitchX'] <= 2)]

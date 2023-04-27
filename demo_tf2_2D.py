@@ -4,10 +4,12 @@ import numpy as np
 import tensorflow as tf
 from matplotlib import pyplot as plt
 from scipy.cluster.vq import kmeans
+
+from ModulatedGPs.kernels import SquaredExponentialModified
 from ModulatedGPs.likelihoods import Gaussian
 from ModulatedGPs.models import SMGP, SVGPModified
 from ModulatedGPs.utils import load_multimodal_data, load_categorical_data, load_data_assoc, load_2d_data_categorical, \
-    load_2d_data
+    load_2d_data, plot_2d_kernel
 
 print(tf.test.is_built_with_cuda())
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
@@ -21,8 +23,8 @@ rng = np.random.default_rng(seed=seed)
 # N, Xtrain, Ytrain, Xtest = load_categorical_data(rng)
 # N, Xtrain, Ytrain, Xtest = load_multimodal_data(rng)
 # N, Xtrain, Ytrain, Xtest = load_data_assoc(rng)
-# N, Xtrain, Ytrain, Xtest = load_2d_data_categorical(rng)
-N, Xtrain, Ytrain, Xtest = load_2d_data(rng)
+N, Xtrain, Ytrain, Xtest = load_2d_data_categorical(rng)
+# N, Xtrain, Ytrain, Xtest = load_2d_data(rng)
 
 # fig = plt.figure()
 # ax = fig.add_subplot(projection='3d')
@@ -44,8 +46,8 @@ K = 3
 lik = Gaussian(D=K)
 
 input_dim = dimX
-pred_kernel = gpflow.kernels.SquaredExponential(variance=0.01, lengthscales=1.0)
-assign_kernel = gpflow.kernels.SquaredExponential(variance=0.1, lengthscales=1.0)
+pred_kernel = gpflow.kernels.SquaredExponential(variance=0.01, lengthscales=[1.0, 1.0])
+assign_kernel = gpflow.kernels.SquaredExponential(variance=0.1, lengthscales=[2.0, 2.0])
 Z, Z_assign = kmeans(Xtrain, num_ind, seed=0)[0], kmeans(Xtrain, num_ind, seed=1)[0]
 # Z, Z_assign = rng.uniform(-2 * np.pi, 2 * np.pi, size=(num_ind, 1)), rng.uniform(-2 * np.pi, 2 * np.pi,
 #                                                                                  size=(num_ind, 1))
@@ -57,6 +59,8 @@ assign_layer = SVGPModified(kernel=assign_kernel, likelihood=lik, inducing_varia
 # model definition
 model = SMGP(likelihood=lik, pred_layer=pred_layer, assign_layer=assign_layer, K=K, num_samples=num_samples,
              num_data=num_data)
+
+gpflow.utilities.print_summary(model)
 
 dataset = tf.data.Dataset.from_tensor_slices((Xtrain, Ytrain))
 dataset = dataset.shuffle(buffer_size=num_data, seed=seed)
@@ -88,6 +92,11 @@ for i in range(1, num_iter + 1):
     except KeyboardInterrupt as e:
         print("stopping training")
         break
+
+gpflow.utilities.print_summary(model)
+
+# plot_2d_kernel(pred_layer)
+# plot_2d_kernel(assign_layer)
 
 n_batches = max(int(Xtest.shape[0] / 500), 1)
 Ss_y, Ss_f = [], []
@@ -126,7 +135,7 @@ ax[1].set_title("Many GPs")
 ax[1].set_xlabel('x1')
 ax[1].set_ylabel('x2')
 ax[1].set_zlabel('z')
-ax[1].set_ylim(1.2 * min(Ytrain), 1.2 * max(Ytrain))
+# ax[1].set_ylim(1.2 * min(Ytrain), 1.2 * max(Ytrain))
 ax[1].grid()
 
 ax[2].plot(iters, elbos, 'o-', ms=8, alpha=0.5)
@@ -134,9 +143,10 @@ ax[2].set_xlabel('Iterations')
 ax[2].set_ylabel('ELBO')
 ax[2].grid()
 
-assign_ = model.predict_assign(Xtrain)
-ax[3].plot(Xtrain[:, 0], assign_, 'o')
-ax[4].plot(Xtrain[:, 1], assign_, 'o')
+# assign_ = model.predict_assign(Xtrain)
+assign_ = model.predict_assign(Xtest)
+ax[3].plot(Xtest[:, 0], assign_, 'o', markersize=1)
+ax[4].plot(Xtest[:, 1], assign_, 'o', markersize=1)
 ax[3].set_xlabel('x1')
 ax[3].set_ylabel('softmax(assignment)')
 ax[4].set_xlabel('x2')
