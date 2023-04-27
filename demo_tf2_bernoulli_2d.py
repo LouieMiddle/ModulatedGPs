@@ -23,13 +23,8 @@ rng = np.random.default_rng(seed=seed)
 # N, Xtrain, Ytrain, Xtest = load_data_assoc(rng)
 N, Xtrain, Ytrain, Xtest = load_2d_data_categorical(rng)
 
-# fig = plt.figure()
-# ax = fig.add_subplot(projection='3d')
-# ax.scatter(Xtrain[:, 0], Xtrain[:, 1], Ytrain, s=1)
-# plt.show()
-
 # Model configuration
-num_iter = 100  # Optimization iterations
+num_iter = 500  # Optimization iterations
 lr = 0.005  # Learning rate for Adam opt
 num_minibatch = 500  # Batch size for stochastic opt
 num_samples = 25  # Number of MC samples
@@ -45,7 +40,7 @@ gaussian_lik = Gaussian(D=K)
 
 input_dim = dimX
 pred_kernel = gpflow.kernels.SquaredExponential(variance=0.01, lengthscales=1.0)
-assign_kernel = gpflow.kernels.SquaredExponential(variance=0.1, lengthscales=1.0)
+assign_kernel = gpflow.kernels.SquaredExponential(variance=0.1, lengthscales=2.0)
 Z, Z_assign = kmeans(Xtrain, num_ind, seed=0)[0], kmeans(Xtrain, num_ind, seed=1)[0]
 # Z, Z_assign = rng.uniform(-2 * np.pi, 2 * np.pi, size=(num_ind, 1)), rng.uniform(-2 * np.pi, 2 * np.pi,
 #                                                                                  size=(num_ind, 1))
@@ -56,7 +51,7 @@ assign_layer = SVGPModified(kernel=assign_kernel, likelihood=gaussian_lik, induc
                             whiten=True)
 
 # model definition
-model = SMGP(likelihood=gaussian_lik, pred_layer=pred_layer, assign_layer=assign_layer, K=K, num_samples=num_samples,
+model = SMGP(likelihood=bernoulli_lik, pred_layer=pred_layer, assign_layer=assign_layer, K=K, num_samples=num_samples,
              num_data=num_data)
 
 gpflow.utilities.print_summary(model)
@@ -141,9 +136,10 @@ ax[2].set_xlabel('Iterations')
 ax[2].set_ylabel('ELBO')
 ax[2].grid()
 
-assign_ = model.predict_assign(Xtrain)
-ax[3].plot(Xtrain[:, 0], assign_[:, 0], 'o')
-ax[4].plot(Xtrain[:, 1], assign_[:, 0], 'o')
+# assign_ = model.predict_assign(Xtrain)
+assign_ = model.predict_assign(Xtest)
+ax[3].plot(Xtest[:, 0], assign_, 'o', markersize=1)
+ax[4].plot(Xtest[:, 1], assign_, 'o', markersize=1)
 ax[3].set_xlabel('x1')
 ax[3].set_ylabel('softmax(assignment)')
 ax[4].set_xlabel('x2')

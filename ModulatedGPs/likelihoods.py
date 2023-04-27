@@ -12,26 +12,7 @@ from ModulatedGPs.utils import inv_probit
 
 
 class Gaussian(ScalarLikelihood):
-    r"""
-    The Gaussian likelihood is appropriate where uncertainties associated with
-    the data are believed to follow a normal distribution, with constant
-    variance.
-
-    Very small uncertainties can lead to numerical instability during the
-    optimization process. A lower bound of 1e-6 is therefore imposed on the
-    likelihood variance by default.
-    """
-
-    def __init__(
-            self,
-            variance=1e-0,
-            D: int = None,
-            **kwargs: Any,
-    ) -> None:
-        """
-        :param variance: The noise variance;
-        :param kwargs: Keyword arguments forwarded to :class:`ScalarLikelihood`.
-        """
+    def __init__(self, variance=1e-0, D: int = None, **kwargs: Any) -> None:
         super().__init__(**kwargs)
 
         if D is not None:
@@ -57,25 +38,21 @@ class Gaussian(ScalarLikelihood):
     def _predict_log_density(self, X: TensorType, Fmu: TensorType, Fvar: TensorType, Y: TensorType) -> tf.Tensor:
         return tf.reduce_sum(logdensities.gaussian(Y, Fmu, Fvar + self.variance), axis=-1)
 
-    # NOTE: Even though the SVGP elbo uses this, it's never called from the SMGP model
+    # NOTE: Even though the SVGP elbo uses this, the SVGP elbo is never called in the SMGP model
     def _variational_expectations(self, X: TensorType, Fmu: TensorType, Fvar: TensorType, Y: TensorType) -> tf.Tensor:
         return -0.5 * np.log(2 * np.pi) - 0.5 * tf.math.log(self.variance) - 0.5 * (
-                (Y - Fmu) ** 2 + Fvar) / self.variance
+                    (Y - Fmu) ** 2 + Fvar) / self.variance
 
 
 class Bernoulli(ScalarLikelihood):
-    def __init__(
-            self, invlink: Callable[[tf.Tensor], tf.Tensor] = inv_probit, **kwargs: Any
-    ) -> None:
+    def __init__(self, invlink: Callable[[tf.Tensor], tf.Tensor] = inv_probit, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self.invlink = invlink
 
     def _scalar_log_prob(self, X: TensorType, F: TensorType, Y: TensorType) -> tf.Tensor:
         return logdensities.bernoulli(Y, self.invlink(F))
 
-    def _predict_mean_and_var(
-            self, X: TensorType, Fmu: TensorType, Fvar: TensorType
-    ) -> MeanAndVariance:
+    def _predict_mean_and_var(self, X: TensorType, Fmu: TensorType, Fvar: TensorType) -> MeanAndVariance:
         if self.invlink is inv_probit:
             p = inv_probit(Fmu / tf.sqrt(1 + Fvar))
             return p, p - tf.square(p)
@@ -83,9 +60,7 @@ class Bernoulli(ScalarLikelihood):
             # for other invlink, use quadrature
             return super()._predict_mean_and_var(X, Fmu, Fvar)
 
-    def _predict_log_density(
-            self, X: TensorType, Fmu: TensorType, Fvar: TensorType, Y: TensorType
-    ) -> tf.Tensor:
+    def _predict_log_density(self, X: TensorType, Fmu: TensorType, Fvar: TensorType, Y: TensorType) -> tf.Tensor:
         p = self.predict_mean_and_var(X, Fmu, Fvar)[0]
         return tf.reduce_sum(logdensities.bernoulli(Y, p), axis=-1)
 
@@ -95,3 +70,6 @@ class Bernoulli(ScalarLikelihood):
     def _conditional_variance(self, X: TensorType, F: TensorType) -> tf.Tensor:
         p = self.conditional_mean(X, F)
         return p - (p ** 2)
+
+    def _variational_expectations(self, X: TensorType, Fmu: TensorType, Fvar: TensorType, Y: TensorType) -> tf.Tensor:
+        return self._quadrature_reduction(self.quadrature(self._quadrature_log_prob, Fmu, Fvar, X=X, Y=Y))

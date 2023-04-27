@@ -7,6 +7,8 @@ from gpflow.models import VGP
 from matplotlib.ticker import MaxNLocator
 
 
+# TODO: Cite my man
+
 def optimise(model, maxiter=2000):
     """
     Perform parameter learning for model given training data.

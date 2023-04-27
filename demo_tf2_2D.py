@@ -23,13 +23,8 @@ rng = np.random.default_rng(seed=seed)
 # N, Xtrain, Ytrain, Xtest = load_categorical_data(rng)
 # N, Xtrain, Ytrain, Xtest = load_multimodal_data(rng)
 # N, Xtrain, Ytrain, Xtest = load_data_assoc(rng)
-N, Xtrain, Ytrain, Xtest = load_2d_data_categorical(rng)
-# N, Xtrain, Ytrain, Xtest = load_2d_data(rng)
-
-# fig = plt.figure()
-# ax = fig.add_subplot(projection='3d')
-# ax.scatter(Xtrain[:, 0], Xtrain[:, 1], Ytrain, s=1)
-# plt.show()
+# N, Xtrain, Ytrain, Xtest = load_2d_data_categorical(rng)
+N, Xtrain, Ytrain, Xtest = load_2d_data(rng)
 
 # Model configuration
 num_iter = 1000  # Optimization iterations

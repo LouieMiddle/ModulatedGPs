@@ -2,6 +2,8 @@ import numpy as np
 import tensorflow as tf
 import gpflow
 
+# TODO: Cite my man
+
 # Define input data
 X = tf.random.uniform(shape=[10, 1], minval=-2.0, maxval=2.0, dtype=tf.float64)
 Y = tf.sin(X) + 0.2 * tf.random.normal(shape=[10, 1], dtype=tf.float64)

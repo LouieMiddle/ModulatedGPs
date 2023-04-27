@@ -40,7 +40,8 @@ def reparameterize(mean, var, z, full_cov=False):
 
 
 def inv_probit(x: tf.Tensor) -> tf.Tensor:
-    jitter = 1e-3  # ensures output is strictly between 0 and 1
+    jitter = 1e-3
+    # ensures output is strictly between 0 and 1
     return 0.5 * (1.0 + tf.math.erf(x / np.sqrt(2.0))) * (1 - 2 * jitter) + jitter
 
 
@@ -61,7 +62,7 @@ def load_categorical_data(rng: np.random.Generator):
 
 
 def load_multimodal_data(rng: np.random.Generator):
-    N, Ns = 3000, 500
+    N, Ns = 1500, 100
 
     epsilon = rng.normal(0, 0.2, (N // 3, 1))
 
@@ -81,7 +82,7 @@ def load_multimodal_data(rng: np.random.Generator):
 
 
 def load_data_assoc():
-    N, Ns, lambda_ = 1000, 500, .4
+    N, Ns, lambda_ = 500, 100, .4
     delta = np.random.binomial(1, lambda_, size=(N, 1))
     noise = np.random.randn(N, 1) * .15
     epsilon = np.random.uniform(low=-1., high=3., size=(N, 1))
@@ -92,7 +93,7 @@ def load_data_assoc():
 
 
 def load_2d_data(rng: np.random.Generator):
-    N, Ns = 1000, 100
+    N, Ns = 500, 100
 
     x_min = [-12.0, -12.0]
     x_max = [12.0, 12.0]

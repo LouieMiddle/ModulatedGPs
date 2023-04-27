@@ -22,9 +22,6 @@ N, Xtrain, Ytrain, Xtest = load_categorical_data(rng)
 # N, Xtrain, Ytrain, Xtest = load_multimodal_data(rng)
 # N, Xtrain, Ytrain, Xtest = load_data_assoc(rng)
 
-# plt.scatter(Xtrain, Ytrain)
-# plt.show()
-
 # Model configuration
 num_iter = 300  # Optimization iterations
 lr = 0.005  # Learning rate for Adam opt
@@ -42,7 +39,7 @@ gaussian_lik = Gaussian(D=K)
 
 input_dim = dimX
 pred_kernel = gpflow.kernels.SquaredExponential(variance=0.01, lengthscales=1.0)
-assign_kernel = gpflow.kernels.SquaredExponential(variance=0.1, lengthscales=1.0)
+assign_kernel = gpflow.kernels.SquaredExponential(variance=0.1, lengthscales=2.0)
 Z, Z_assign = kmeans(Xtrain, num_ind, seed=0)[0], kmeans(Xtrain, num_ind, seed=1)[0]
 # Z, Z_assign = rng.uniform(-2 * np.pi, 2 * np.pi, size=(num_ind, 1)), rng.uniform(-2 * np.pi, 2 * np.pi,
 #                                                                                  size=(num_ind, 1))
@@ -52,7 +49,7 @@ assign_layer = SVGPModified(kernel=assign_kernel, likelihood=gaussian_lik, induc
                             whiten=True)
 
 # model definition
-model = SMGP(likelihood=gaussian_lik, pred_layer=pred_layer, assign_layer=assign_layer, K=K, num_samples=num_samples,
+model = SMGP(likelihood=bernoulli_lik, pred_layer=pred_layer, assign_layer=assign_layer, K=K, num_samples=num_samples,
              num_data=num_data)
 
 gpflow.utilities.print_summary(model)

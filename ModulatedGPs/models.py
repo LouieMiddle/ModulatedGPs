@@ -15,8 +15,6 @@ float_type = config.default_float()
 jitter_level = config.default_jitter()
 
 
-# SND likely stands for Samples by N by D, where:
-#
 # Samples: The number of Monte Carlo samples used in the model.
 # N: The number of data points.
 # D: The dimensionality of the output.
@@ -31,6 +29,7 @@ class SGP(Module):
         self.num_samples = num_samples
         self.num_data = num_data
         self.likelihood = BroadcastingLikelihood(likelihood)
+        # self.likelihood = likelihood
         self.pred_layer = pred_layer
 
     def integrate(self, X, S=1):
@@ -78,11 +77,12 @@ class SMGP(SGP):
 
     def E_log_p_Y(self, Xt, Y, W_SND):
         Fmean, Fvar = self._build_predict(Xt, full_cov=False)
-        var_exp = self.likelihood.variational_expectations([], Fmean, Fvar, tf.cast(Y, dtype=tf.float64))
+        var_exp = self.likelihood.variational_expectations(Xt, Fmean, Fvar, tf.cast(Y, dtype=tf.float64))
         var_exp *= tf.cast(W_SND, dtype=float_type)
         return tf.reduce_logsumexp(tf.reduce_sum(var_exp, 2), 0) - np.log(self.num_samples)
 
-    @tf.function
+    # TODO: Assign layer not updated if using bernoulli lik in SMGP
+    # @tf.function
     def _build_likelihood(self, X, Y):
         Xt = self.integrate(X, self.num_samples)[0]
         # sample from q(w)

@@ -51,6 +51,8 @@ Xtrain, Xtest, Ytrain, Ytest = train_test_split(features, targets, test_size=0.2
 Xtrain, Xtest, Ytrain, Ytest = Xtrain.to_numpy(), Xtest.to_numpy(), Ytrain.to_numpy(), Ytest.to_numpy()
 Ytrain, Ytest = Ytrain.reshape((len(Ytrain), 1)), Ytest.reshape((len(Ytest), 1))
 
+Xtest = np.linspace([-2.0, 0.0], [1.0, 3.0], 100)
+
 print(tf.test.is_built_with_cuda())
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
@@ -60,13 +62,8 @@ seed = 0
 tf.random.set_seed(seed)
 rng = np.random.default_rng(seed=seed)
 
-# fig = plt.figure()
-# ax = fig.add_subplot(projection='3d')
-# ax.scatter(Xtrain[:, 0], Xtrain[:, 1], Ytrain, s=1)
-# plt.show()
-
 # Model configuration
-num_iter = 6000  # Optimization iterations
+num_iter = 1000  # Optimization iterations
 lr = 0.005  # Learning rate for Adam opt
 num_minibatch = 500  # Batch size for stochastic opt
 num_samples = 25  # Number of MC samples
@@ -77,17 +74,17 @@ dimY = 1  # Output dimensions
 num_ind = 25  # Inducing size for f
 K = 2
 
-bernoulli_lik = Bernoulli()
+# bernoulli_lik = Bernoulli()
 gaussian_lik = Gaussian(D=K)
 
 input_dim = dimX
-pred_kernel = gpflow.kernels.SquaredExponential(variance=0.5, lengthscales=0.5)
+pred_kernel = gpflow.kernels.SquaredExponential(variance=0.1, lengthscales=1.0)
 assign_kernel = gpflow.kernels.SquaredExponential(variance=0.1, lengthscales=1.0)
 Z, Z_assign = kmeans(Xtrain, num_ind, seed=0)[0], kmeans(Xtrain, num_ind, seed=1)[0]
 # Z, Z_assign = rng.uniform(-2 * np.pi, 2 * np.pi, size=(num_ind, 1)), rng.uniform(-2 * np.pi, 2 * np.pi,
 #                                                                                  size=(num_ind, 1))
 
-pred_layer = SVGPModified(kernel=pred_kernel, likelihood=bernoulli_lik, inducing_variable=Z, num_latent_gps=K, whiten=True)
+pred_layer = SVGPModified(kernel=pred_kernel, likelihood=gaussian_lik, inducing_variable=Z, num_latent_gps=K, whiten=True)
 assign_layer = SVGPModified(kernel=assign_kernel, likelihood=gaussian_lik, inducing_variable=Z_assign, num_latent_gps=K,
                             whiten=True)
 
@@ -140,7 +137,10 @@ Xt_tiled = np.tile(Xtest, [num_predict_samples, 1])
 # Plotting results
 fig = plt.figure(figsize=(14, 8))
 ax = []
-for i in range(1, 8):
+for i in range(1, 9):
+    if i == 8:
+        ax.append(fig.add_subplot(4, 2, i, projection='3d'))
+        continue
     if i > 2:
         ax.append(fig.add_subplot(4, 2, i))
         continue
@@ -171,8 +171,8 @@ ax[2].set_ylabel('ELBO')
 ax[2].grid()
 
 assign_ = model.predict_assign(Xtrain)
-ax[3].plot(Xtrain[:, 0], assign_, 'o')
-ax[4].plot(Xtrain[:, 1], assign_, 'o')
+ax[3].plot(Xtrain[:, 0], assign_, 'o', markersize=1)
+ax[4].plot(Xtrain[:, 1], assign_, 'o', markersize=1)
 ax[3].set_xlabel('x1')
 ax[3].set_ylabel('softmax(assignment)')
 ax[4].set_xlabel('x2')
@@ -197,6 +197,14 @@ ax[6].set_xlabel('x2')
 ax[6].set_ylabel('Pred. of GP experts')
 ax[5].grid()
 ax[6].grid()
+
+for i in range(K):
+    ax[7].scatter(Xtrain[:, 0], Xtrain[:, 1], assign_[:, i], color=colors[i], s=1)
+ax[7].set_title("Assignment 3D")
+ax[7].set_xlabel('x1')
+ax[7].set_ylabel('x2')
+ax[7].set_zlabel('z')
+ax[7].grid()
 
 plt.tight_layout()
 plt.show()
