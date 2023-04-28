@@ -1,4 +1,3 @@
-import matplotlib.colors as mcolors
 import numpy as np
 import tensorflow as tf
 from gpflow import config
@@ -141,33 +140,8 @@ def load_2d_data_categorical(rng: np.random.Generator):
 
     return N, Xtrain, Ytrain, Xtest
 
-
-def plot_2d_kernel_prediction(axes, svgp) -> None:
-    Xplot = np.linspace([-6.0, -6.0], [6.0, 6.0], 100)
-    X = (tf.tile(Xplot[None, :, :], [1, 1, 1]), None)[0]
-
-    f_mean, f_var = svgp.predict_f(X, full_cov=False)
-    f_lower, f_upper = (f_mean - 2 * f_var ** 0.5), (f_mean + 2 * f_var ** 0.5)
-
-    colors = [mcolors.TABLEAU_COLORS[key] for key in mcolors.TABLEAU_COLORS.keys()]
-    for i in range(3):
-        axes[0].plot(Xplot[:, 0], f_mean[:, i], '-', alpha=1., color=colors[i])
-        axes[0].fill_between(Xplot[:, 0], f_lower[:, i], f_upper[:, i], alpha=0.3, color=colors[i])
-        axes[1].plot(Xplot[:, 1], f_mean[:, i], '-', alpha=1., color=colors[i])
-        axes[1].fill_between(Xplot[:, 1], f_lower[:, i], f_upper[:, i], alpha=0.3, color=colors[i])
-
-    axes[0].set_xlabel('x1')
-    axes[0].set_ylabel('Pred.')
-    axes[1].set_xlabel('x2')
-    axes[1].set_ylabel('Pred.')
-    axes[0].grid()
-    axes[1].grid()
-
-
 def plot_2d_kernel(svgp) -> None:
-    _, (pred_ax_x1, pred_ax_x2) = plt.subplots(nrows=1, ncols=2)
-    plot_2d_kernel_prediction([pred_ax_x1, pred_ax_x2], svgp)
-
+    _, (pred_ax_x1) = plt.subplots(nrows=1, ncols=2, subplot_kw={"projection": "3d"})
 
 def plot_kernel_samples(ax: Axes, svgp) -> None:
     Xplot = np.linspace(-6.0, 6.0, 100)[:, None]

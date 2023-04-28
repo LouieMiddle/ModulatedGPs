@@ -9,10 +9,12 @@ from matplotlib import pyplot as plt
 from scipy.cluster.vq import kmeans
 from sklearn.model_selection import train_test_split
 
-from ModulatedGPs.likelihoods import Gaussian, Bernoulli
+from ModulatedGPs.likelihoods import Gaussian
 from ModulatedGPs.models import SMGP, SVGPModified
 
+
 # TODO: Need to group boundaries and non boundaries together
+#  Or do multiclass classifiers
 
 def filter_by_pitch_x_pitch_y(data):
     data = data[(data['pitchX'] >= -2) & (data['pitchX'] <= 2)]
@@ -50,8 +52,6 @@ name = 'JosButtler_RightArmSeam_'
 Xtrain, Xtest, Ytrain, Ytest = train_test_split(features, targets, test_size=0.2)
 Xtrain, Xtest, Ytrain, Ytest = Xtrain.to_numpy(), Xtest.to_numpy(), Ytrain.to_numpy(), Ytest.to_numpy()
 Ytrain, Ytest = Ytrain.reshape((len(Ytrain), 1)), Ytest.reshape((len(Ytest), 1))
-
-Xtest = np.linspace([-2.0, 0.0], [1.0, 3.0], 100)
 
 print(tf.test.is_built_with_cuda())
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
@@ -135,16 +135,13 @@ samples_f_stack = np.reshape(samples_f, (num_predict_samples * Xtest.shape[0], -
 Xt_tiled = np.tile(Xtest, [num_predict_samples, 1])
 
 # Plotting results
-fig = plt.figure(figsize=(14, 8))
+fig = plt.figure(figsize=(16, 10))
 ax = []
-for i in range(1, 9):
-    if i == 8:
-        ax.append(fig.add_subplot(4, 2, i, projection='3d'))
+for i in range(1, 10):
+    if i > 4:
+        ax.append(fig.add_subplot(5, 2, i))
         continue
-    if i > 2:
-        ax.append(fig.add_subplot(4, 2, i))
-        continue
-    ax.append(fig.add_subplot(4, 2, i, projection='3d'))
+    ax.append(fig.add_subplot(5, 2, i, projection='3d'))
 
 ax[0].scatter(Xtrain[:, 0], Xtrain[:, 1], Ytrain, s=1)
 ax[0].set_title("Raw Data")
@@ -165,46 +162,66 @@ ax[1].set_zlabel('z')
 ax[1].set_ylim(1.2 * min(Ytrain), 1.2 * max(Ytrain))
 ax[1].grid()
 
-ax[2].plot(iters, elbos, 'o-', ms=8, alpha=0.5)
-ax[2].set_xlabel('Iterations')
-ax[2].set_ylabel('ELBO')
+assign_ = model.predict_assign(Xtest)
+for i in range(K):
+    ax[2].scatter(Xtest[:, 0], Xtest[:, 1], assign_[:, i], color=colors[i], s=1)
+ax[2].set_title("Assignment 3D")
+ax[2].set_xlabel('x1')
+ax[2].set_ylabel('x2')
+ax[2].set_zlabel('z')
 ax[2].grid()
 
-assign_ = model.predict_assign(Xtrain)
-ax[3].plot(Xtrain[:, 0], assign_, 'o', markersize=1)
-ax[4].plot(Xtrain[:, 1], assign_, 'o', markersize=1)
+fmean, _ = model.predict_y(Xtest)
+fmean_ = np.mean(fmean, 0)
+for i in range(K):
+    ax[3].scatter(Xtest[:, 0], Xtest[:, 1], fmean_[:, i], color=colors[i], s=1)
+ax[3].set_title("Prediction 3D")
 ax[3].set_xlabel('x1')
-ax[3].set_ylabel('softmax(assignment)')
-ax[4].set_xlabel('x2')
-ax[4].set_ylabel('softmax(assignment)')
+ax[3].set_ylabel('x2')
+ax[3].set_zlabel('z')
 ax[3].grid()
+
+ax[4].plot(iters, elbos, 'o-', ms=8, alpha=0.5)
+ax[4].set_xlabel('Iterations')
+ax[4].set_ylabel('ELBO')
 ax[4].grid()
 
-fmean, fvar = model.predict_y(Xtest)
-fmean_, fvar_ = np.mean(fmean, 0), np.mean(fvar, 0)
-lb, ub = (fmean_ - 2 * fvar_ ** 0.5), (fmean_ + 2 * fvar_ ** 0.5)
-I = np.argmax(assign_, 1)
-for i in range(K):
-    ax[5].plot(Xtest[:, 0], fmean_[:, i], '-', alpha=1., color=colors[i])
-    ax[5].fill_between(Xtest[:, 0], lb[:, i], ub[:, i], alpha=0.3, color=colors[i])
-    ax[6].plot(Xtest[:, 1], fmean_[:, i], '-', alpha=1., color=colors[i])
-    ax[6].fill_between(Xtest[:, 1], lb[:, i], ub[:, i], alpha=0.3, color=colors[i])
-ax[5].scatter(Xtrain[:, 0], Ytrain, marker='x', color='black', alpha=0.5)
-ax[6].scatter(Xtrain[:, 1], Ytrain, marker='x', color='black', alpha=0.5)
-ax[5].set_xlabel('x1')
-ax[5].set_ylabel('Pred. of GP experts')
-ax[6].set_xlabel('x2')
-ax[6].set_ylabel('Pred. of GP experts')
-ax[5].grid()
-ax[6].grid()
+stumpsX_const_value = 0.0
+stumpsY_const_value = 1.0
 
-for i in range(K):
-    ax[7].scatter(Xtrain[:, 0], Xtrain[:, 1], assign_[:, i], color=colors[i], s=1)
-ax[7].set_title("Assignment 3D")
-ax[7].set_xlabel('x1')
-ax[7].set_ylabel('x2')
-ax[7].set_zlabel('z')
-ax[7].grid()
+Xtest_stumpsX = np.c_[Xtrain[:, 0], stumpsY_const_value * np.ones(len(Xtrain[:, 0]))]
+Xtest_stumpsY = np.c_[stumpsX_const_value * np.ones(len(Xtrain[:, 1])), Xtrain[:, 1]]
+
+Xtests = [Xtest_stumpsX, Xtest_stumpsY]
+
+for i in range(2):
+    assign_ = model.predict_assign(Xtests[i])
+    ax[i + 5].plot(Xtests[i][:, i], assign_, 'o', markersize=1)
+    ax[i + 5].set_xlabel('x' + str(i+1))
+    ax[i + 5].set_ylabel('softmax(assignment)')
+    ax[i + 5].grid()
+
+for i in range(2):
+    fmean, fvar = model.predict_y(Xtests[i])
+    fmean_, fvar_ = np.mean(fmean, 0), np.mean(fvar, 0)
+
+    X_sorted = np.zeros_like(Xtests[i])
+    for j in range(Xtests[i].shape[1]):
+        sort_indices = np.argsort(Xtests[i][:, j])
+        X_sorted[:, j] = Xtests[i][sort_indices, j]
+        fmean_sorted = fmean_[sort_indices]
+        fvar_sorted = fvar_[sort_indices]
+        lb, ub = (fmean_sorted - 2 * fvar_sorted ** 0.5), (fmean_sorted + 2 * fvar_sorted ** 0.5)
+
+        # I = np.argmax(assign_, 1)
+        for k in range(K):
+            ax[i + 7].plot(X_sorted[:, j], fmean_sorted[:, k], '-', alpha=1., color=colors[k])
+            ax[i + 7].fill_between(X_sorted[:, j], lb[:, k], ub[:, k], alpha=0.3, color=colors[k])
+
+        ax[i + 7].scatter(Xtrain[:, i], Ytrain, marker='x', color='black', alpha=0.5)
+        ax[i + 7].set_xlabel('x' + str(i + 1))
+        ax[i + 7].set_ylabel('Pred. of GP experts')
+        ax[i + 7].grid()
 
 plt.tight_layout()
 plt.show()
