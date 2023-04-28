@@ -7,7 +7,7 @@ from scipy.cluster.vq import kmeans
 
 from ModulatedGPs.likelihoods import Gaussian
 from ModulatedGPs.models import SMGP, SVGPModified
-from ModulatedGPs.utils import load_multimodal_data, load_categorical_data, load_data_assoc
+from ModulatedGPs.utils import load_multimodal_data
 
 print(tf.test.is_built_with_cuda())
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
@@ -18,11 +18,7 @@ seed = 0
 tf.random.set_seed(seed)
 rng = np.random.default_rng(seed=seed)
 
-# N, Xtrain, Ytrain, Xtest = load_categorical_data(rng)
 N, Xtrain, Ytrain, Xtest = load_multimodal_data(rng)
-# N, Xtrain, Ytrain, Xtest = load_data_assoc(rng)
-# N, Xtrain, Ytrain, Xtest = load_2d_data_categorical(rng)
-# N, Xtrain, Ytrain, Xtest = load_2d_data(rng)
 
 # Model configuration
 num_iter = 1000  # Optimization iterations
@@ -76,7 +72,6 @@ for i in range(1, num_iter + 1):
 
             if i % 5 == 0 or i == 0:
                 print('{:>5d}'.format(i) + '{:>24.6f}'.format(elbo))
-                # gpflow.utilities.print_summary(model)
                 iters.append(i)
                 elbos.append(elbo)
     except KeyboardInterrupt as e:

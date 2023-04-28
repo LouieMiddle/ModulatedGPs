@@ -70,9 +70,6 @@ def load_multimodal_data(rng: np.random.Generator):
     Ytrain1 = np.sin(Xtrain[0:N // 3]) + epsilon
     Ytrain2 = np.sin(Xtrain[N // 3:2 * N // 3]) - 2 * np.exp(-0.5 * pow(Xtrain[N // 3:2 * N // 3] - 2, 2)) + epsilon
     Ytrain3 = -2 - (3 / (8 * np.pi)) * Xtrain[2 * N // 3:N] + (3 / 10) * np.sin(2 * Xtrain[2 * N // 3:N]) + epsilon
-    # Ytrain1 = np.sin(Xtrain[0:N // 3])
-    # Ytrain2 = np.sin(Xtrain[N // 3:2 * N // 3]) - 2 * np.exp(-0.5 * pow(Xtrain[N // 3:2 * N // 3] - 2, 2))
-    # Ytrain3 = -2 - (3 / (8 * np.pi)) * Xtrain[2 * N // 3:N] + (3 / 10) * np.sin(2 * Xtrain[2 * N // 3:N])
     Ytrain = np.concatenate((Ytrain1, Ytrain2, Ytrain3))
 
     Xtest = np.linspace(-2 * np.pi, 2 * np.pi, Ns)[:, None]
@@ -104,14 +101,6 @@ def load_2d_data(rng: np.random.Generator):
     radial2 = np.sqrt((Xtrain[:, 0] - 0.5) ** 2 + (Xtrain[:, 1] - 0.5) ** 2) + 10.0
     # himmelblaus = (Xtrain[:, 0] ** 2 + Xtrain[:, 1] - 11) ** 2 + (Xtrain[:, 0] + Xtrain[:, 1] ** 2 - 7) ** 2 + 10.0
 
-    # fig = plt.figure()
-    # ax1, ax2 = fig.add_subplot(2, 1, 1, projection='3d'), fig.add_subplot(2, 1, 2, projection='3d')
-    # ax1.set_title("radial")
-    # ax1.scatter(Xtrain[0: N // 2][:, 0], Xtrain[0: N // 2][:, 1], radial[0: N // 2])
-    # ax2.set_title("radial 2")
-    # ax2.scatter(Xtrain[N // 2: N][:, 0], Xtrain[N // 2: N][:, 1], radial2[N // 2: N])
-    # plt.show()
-
     Ytrain = np.concatenate((radial[0: N // 2], radial2[N // 2: N])).reshape((N, 1))
     # Ytrain = radial.reshape((N, 1))
 
@@ -132,16 +121,12 @@ def load_2d_data_categorical(rng: np.random.Generator):
     # to add occasional outliers
     outlier_indices = rng.choice(N, size=int(N * lambda_), replace=False)
     Ytrain[outlier_indices] = 1 - Ytrain[outlier_indices]
-
-    # Ytrain = Ytrain[:, 0:1]
     Ytrain = Ytrain.reshape((N, 1))
 
     Xtest = np.linspace(x_min, x_max, Ns)
 
     return N, Xtrain, Ytrain, Xtest
 
-def plot_2d_kernel(svgp) -> None:
-    _, (pred_ax_x1) = plt.subplots(nrows=1, ncols=2, subplot_kw={"projection": "3d"})
 
 def plot_kernel_samples(ax: Axes, svgp) -> None:
     Xplot = np.linspace(-6.0, 6.0, 100)[:, None]
