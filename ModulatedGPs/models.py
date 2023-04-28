@@ -82,7 +82,7 @@ class SMGP(SGP):
         return tf.reduce_logsumexp(tf.reduce_sum(var_exp, 2), 0) - np.log(self.num_samples)
 
     # TODO: Assign layer not updated if using bernoulli lik in SMGP
-    # @tf.function
+    @tf.function
     def _build_likelihood(self, X, Y):
         Xt = self.integrate(X, self.num_samples)[0]
         # sample from q(w)

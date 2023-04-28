@@ -27,6 +27,15 @@ def load_csv_data_mipl():
     return pd.read_csv(csv_path)
 
 
+print(tf.test.is_built_with_cuda())
+print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
+
+colors = [mcolors.TABLEAU_COLORS[key] for key in mcolors.TABLEAU_COLORS.keys()]
+
+seed = 0
+tf.random.set_seed(seed)
+rng = np.random.default_rng(seed=seed)
+
 mipl_csv = load_csv_data_mipl()
 mipl_csv = filter_by_pitch_x_pitch_y(mipl_csv)
 
@@ -53,14 +62,8 @@ Xtrain, Xtest, Ytrain, Ytest = train_test_split(features, targets, test_size=0.2
 Xtrain, Xtest, Ytrain, Ytest = Xtrain.to_numpy(), Xtest.to_numpy(), Ytrain.to_numpy(), Ytest.to_numpy()
 Ytrain, Ytest = Ytrain.reshape((len(Ytrain), 1)), Ytest.reshape((len(Ytest), 1))
 
-print(tf.test.is_built_with_cuda())
-print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
-
-colors = [mcolors.TABLEAU_COLORS[key] for key in mcolors.TABLEAU_COLORS.keys()]
-
-seed = 0
-tf.random.set_seed(seed)
-rng = np.random.default_rng(seed=seed)
+Xplot = rng.uniform([min(Xtrain[:, 0]) - 1, min(Xtrain[:, 1]) - 1], [max(Xtrain[:, 0]) + 1, max(Xtrain[:, 1]) + 1],
+                    (200, 2))
 
 # Model configuration
 num_iter = 1000  # Optimization iterations
@@ -84,7 +87,8 @@ Z, Z_assign = kmeans(Xtrain, num_ind, seed=0)[0], kmeans(Xtrain, num_ind, seed=1
 # Z, Z_assign = rng.uniform(-2 * np.pi, 2 * np.pi, size=(num_ind, 1)), rng.uniform(-2 * np.pi, 2 * np.pi,
 #                                                                                  size=(num_ind, 1))
 
-pred_layer = SVGPModified(kernel=pred_kernel, likelihood=gaussian_lik, inducing_variable=Z, num_latent_gps=K, whiten=True)
+pred_layer = SVGPModified(kernel=pred_kernel, likelihood=gaussian_lik, inducing_variable=Z, num_latent_gps=K,
+                          whiten=True)
 assign_layer = SVGPModified(kernel=assign_kernel, likelihood=gaussian_lik, inducing_variable=Z_assign, num_latent_gps=K,
                             whiten=True)
 
@@ -122,17 +126,17 @@ for i in range(1, num_iter + 1):
         print("stopping training")
         break
 
-n_batches = max(int(Xtest.shape[0] / 500), 1)
+n_batches = max(int(Xplot.shape[0] / 500), 1)
 Ss_y, Ss_f = [], []
-for X_batch in np.array_split(Xtest, n_batches):
+for X_batch in np.array_split(Xplot, n_batches):
     samples_y, samples_f = model.predict_samples(X_batch, S=num_predict_samples)
     Ss_y.append(samples_y)
     Ss_f.append(samples_f)
 samples_y, samples_f = np.hstack(Ss_y), np.hstack(Ss_f)
 mu_avg, fmu_avg = np.mean(samples_y, 0), np.mean(samples_f, 0)
-samples_y_stack = np.reshape(samples_y, (num_predict_samples * Xtest.shape[0], -1))
-samples_f_stack = np.reshape(samples_f, (num_predict_samples * Xtest.shape[0], -1))
-Xt_tiled = np.tile(Xtest, [num_predict_samples, 1])
+samples_y_stack = np.reshape(samples_y, (num_predict_samples * Xplot.shape[0], -1))
+samples_f_stack = np.reshape(samples_f, (num_predict_samples * Xplot.shape[0], -1))
+Xt_tiled = np.tile(Xplot, [num_predict_samples, 1])
 
 # Plotting results
 fig = plt.figure(figsize=(16, 10))
@@ -162,19 +166,19 @@ ax[1].set_zlabel('z')
 ax[1].set_ylim(1.2 * min(Ytrain), 1.2 * max(Ytrain))
 ax[1].grid()
 
-assign_ = model.predict_assign(Xtest)
+assign_ = model.predict_assign(Xplot)
 for i in range(K):
-    ax[2].scatter(Xtest[:, 0], Xtest[:, 1], assign_[:, i], color=colors[i], s=1)
+    ax[2].scatter(Xplot[:, 0], Xplot[:, 1], assign_[:, i], color=colors[i], s=1)
 ax[2].set_title("Assignment 3D")
 ax[2].set_xlabel('x1')
 ax[2].set_ylabel('x2')
 ax[2].set_zlabel('z')
 ax[2].grid()
 
-fmean, _ = model.predict_y(Xtest)
+fmean, _ = model.predict_y(Xplot)
 fmean_ = np.mean(fmean, 0)
 for i in range(K):
-    ax[3].scatter(Xtest[:, 0], Xtest[:, 1], fmean_[:, i], color=colors[i], s=1)
+    ax[3].scatter(Xplot[:, 0], Xplot[:, 1], fmean_[:, i], color=colors[i], s=1)
 ax[3].set_title("Prediction 3D")
 ax[3].set_xlabel('x1')
 ax[3].set_ylabel('x2')
@@ -189,15 +193,15 @@ ax[4].grid()
 stumpsX_const_value = 0.0
 stumpsY_const_value = 1.0
 
-Xtest_stumpsX = np.c_[Xtrain[:, 0], stumpsY_const_value * np.ones(len(Xtrain[:, 0]))]
-Xtest_stumpsY = np.c_[stumpsX_const_value * np.ones(len(Xtrain[:, 1])), Xtrain[:, 1]]
+Xtest_stumpsX = np.c_[Xplot[:, 0], stumpsY_const_value * np.ones(len(Xplot[:, 0]))]
+Xtest_stumpsY = np.c_[stumpsX_const_value * np.ones(len(Xplot[:, 1])), Xplot[:, 1]]
 
 Xtests = [Xtest_stumpsX, Xtest_stumpsY]
 
 for i in range(2):
     assign_ = model.predict_assign(Xtests[i])
     ax[i + 5].plot(Xtests[i][:, i], assign_, 'o', markersize=1)
-    ax[i + 5].set_xlabel('x' + str(i+1))
+    ax[i + 5].set_xlabel('x' + str(i + 1))
     ax[i + 5].set_ylabel('softmax(assignment)')
     ax[i + 5].grid()
 
@@ -206,22 +210,21 @@ for i in range(2):
     fmean_, fvar_ = np.mean(fmean, 0), np.mean(fvar, 0)
 
     X_sorted = np.zeros_like(Xtests[i])
-    for j in range(Xtests[i].shape[1]):
-        sort_indices = np.argsort(Xtests[i][:, j])
-        X_sorted[:, j] = Xtests[i][sort_indices, j]
-        fmean_sorted = fmean_[sort_indices]
-        fvar_sorted = fvar_[sort_indices]
-        lb, ub = (fmean_sorted - 2 * fvar_sorted ** 0.5), (fmean_sorted + 2 * fvar_sorted ** 0.5)
+    sort_indices = np.argsort(Xtests[i][:, i])
+    X_sorted[:, i] = Xtests[i][sort_indices, i]
+    fmean_sorted = fmean_[sort_indices]
+    fvar_sorted = fvar_[sort_indices]
 
-        # I = np.argmax(assign_, 1)
-        for k in range(K):
-            ax[i + 7].plot(X_sorted[:, j], fmean_sorted[:, k], '-', alpha=1., color=colors[k])
-            ax[i + 7].fill_between(X_sorted[:, j], lb[:, k], ub[:, k], alpha=0.3, color=colors[k])
+    lb, ub = (fmean_sorted - 2 * fvar_sorted ** 0.5), (fmean_sorted + 2 * fvar_sorted ** 0.5)
 
-        ax[i + 7].scatter(Xtrain[:, i], Ytrain, marker='x', color='black', alpha=0.5)
-        ax[i + 7].set_xlabel('x' + str(i + 1))
-        ax[i + 7].set_ylabel('Pred. of GP experts')
-        ax[i + 7].grid()
+    for k in range(K):
+        ax[i + 7].plot(X_sorted[:, i], fmean_sorted[:, k], '-', alpha=1., color=colors[k])
+        ax[i + 7].fill_between(X_sorted[:, i], lb[:, k], ub[:, k], alpha=0.3, color=colors[k])
+
+    ax[i + 7].scatter(Xtrain[:, i], Ytrain, marker='x', color='black', alpha=0.5)
+    ax[i + 7].set_xlabel('x' + str(i + 1))
+    ax[i + 7].set_ylabel('Pred. of GP experts')
+    ax[i + 7].grid()
 
 plt.tight_layout()
 plt.show()
