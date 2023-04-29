@@ -49,6 +49,9 @@ pred_layer = SVGPModified(kernel=pred_kernel, likelihood=gaussian_lik, inducing_
 assign_layer = SVGPModified(kernel=assign_kernel, likelihood=gaussian_lik, inducing_variable=Z_assign, num_latent_gps=K,
                             whiten=True)
 
+gpflow.set_trainable(pred_layer.inducing_variable, False)
+gpflow.set_trainable(assign_layer.inducing_variable, False)
+
 # model definition
 model = SMGP(pred_likelihood=gaussian_lik, assign_likelihood=gaussian_lik, pred_layer=pred_layer,
              assign_layer=assign_layer, K=K, num_samples=num_samples,
