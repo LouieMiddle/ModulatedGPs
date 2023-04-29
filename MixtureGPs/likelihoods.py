@@ -18,7 +18,8 @@ class GaussianModified(ScalarLikelihood):
 
         variance = np.maximum(variance - 1e-6, np.finfo(np.float64).eps)
         variance = variance + np.log(-np.expm1(-variance))
-        self.variance: Optional[ParameterOrFunction] = Parameter(variance, transform=gpflow.utilities.positive(), trainable=trainable)
+        self.variance: Optional[ParameterOrFunction] = Parameter(variance, transform=gpflow.utilities.positive(),
+                                                                 trainable=trainable)
 
     def _scalar_log_prob(self, X: TensorType, F: TensorType, Y: TensorType) -> tf.Tensor:
         return logdensities.gaussian(Y, F, self.variance)

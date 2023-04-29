@@ -6,9 +6,10 @@ from gpflow.likelihoods import Bernoulli
 from matplotlib import pyplot as plt
 from scipy.cluster.vq import kmeans
 
-from ModulatedGPs.likelihoods import GaussianModified
-from ModulatedGPs.models import SMGP, SVGPModified
-from ModulatedGPs.utils import load_categorical_data
+from MixtureGPs.likelihoods import GaussianModified
+from MixtureGPs.models import SMGP, SVGPModified
+from utils.dataset_utils import load_toy_categorical_data
+from utils.training_utils import run_adam
 
 print(tf.test.is_built_with_cuda())
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
@@ -19,7 +20,7 @@ seed = 0
 tf.random.set_seed(seed)
 rng = np.random.default_rng(seed=seed)
 
-N, Xtrain, Ytrain, Xtest = load_categorical_data(rng)
+N, Xtrain, Ytrain, Xtest = load_toy_categorical_data(rng)
 
 # Model configuration
 num_iter = 2000  # Optimization iterations
@@ -37,17 +38,18 @@ input_dim = dimX
 pred_kernel = gpflow.kernels.SquaredExponential(variance=0.1, lengthscales=1.0)
 assign_kernel = gpflow.kernels.SquaredExponential(variance=0.1, lengthscales=1.0)
 Z, Z_assign = kmeans(Xtrain, num_ind, seed=0)[0], kmeans(Xtrain, num_ind, seed=1)[0]
-# Z, Z_assign = rng.uniform(-2 * np.pi, 2 * np.pi, size=(num_ind, 1)), rng.uniform(-2 * np.pi, 2 * np.pi,
-#                                                                                  size=(num_ind, 1))
 
 bernoulli_lik = Bernoulli()
-gaussian_modified_lik = GaussianModified(D=K, trainable=False)
+gaussian_modified_lik = GaussianModified(D=K)
 
 pred_layer = SVGPModified(kernel=pred_kernel, likelihood=bernoulli_lik, inducing_variable=Z, num_latent_gps=K,
                           whiten=True)
 assign_layer = SVGPModified(kernel=assign_kernel, likelihood=gaussian_modified_lik, inducing_variable=Z_assign,
                             num_latent_gps=K,
                             whiten=True)
+
+gpflow.set_trainable(pred_layer.inducing_variable, False)
+gpflow.set_trainable(assign_layer.inducing_variable, False)
 
 # model definition
 model = SMGP(assign_likelihood=gaussian_modified_lik, pred_likelihood=bernoulli_lik, pred_layer=pred_layer,
@@ -58,32 +60,10 @@ gpflow.utilities.print_summary(model)
 
 dataset = tf.data.Dataset.from_tensor_slices((Xtrain, Ytrain))
 dataset = dataset.shuffle(buffer_size=num_data, seed=seed)
-dataset = dataset.batch(num_minibatch)
+dataset = dataset.batch(num_minibatch).repeat()
+train_iter = iter(dataset)
 
-optimizer = tf.optimizers.Adam(lr)
-
-print('{:>5s}'.format("iter") + '{:>24s}'.format("ELBO:"))
-iters = []
-elbos = []
-for i in range(1, num_iter + 1):
-    try:
-        for x_batch, y_batch in dataset:
-            with tf.GradientTape() as tape:
-                # Record gradients of the loss with respect to the trainable variables
-                elbo = model._build_likelihood(x_batch, y_batch)
-                loss_value = -elbo
-                gradients = tape.gradient(loss_value, model.trainable_variables)
-
-            # Use the optimizer to apply the gradients to update the trainable variables
-            optimizer.apply_gradients(zip(gradients, model.trainable_variables))
-
-            if i % 5 == 0 or i == 0:
-                print('{:>5d}'.format(i) + '{:>24.6f}'.format(elbo))
-                iters.append(i)
-                elbos.append(elbo)
-    except KeyboardInterrupt as e:
-        print("stopping training")
-        break
+iters, elbos = run_adam(model, num_iter, train_iter, lr, False)
 
 gpflow.utilities.print_summary(model)
 
@@ -139,5 +119,5 @@ ax[1, 1].set_ylabel('Pred. of GP experts')
 ax[1, 1].grid()
 
 plt.tight_layout()
-plt.savefig('figs/demo_tf2_bernoulli.png')
+plt.savefig('../figs/demo_tf2_bernoulli.png')
 plt.show()

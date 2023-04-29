@@ -2,10 +2,12 @@ import numpy as np
 import tensorflow as tf
 import tensorflow_probability as tfp
 from check_shapes import inherit_check_shapes
-from gpflow import config, Module, covariances, default_jitter, posteriors
-from gpflow.base import TensorType, MeanAndVariance
+from gpflow import config, covariances, default_jitter, posteriors
+from gpflow.base import TensorType, MeanAndVariance, Module
 from gpflow.conditionals import base_conditional
-from gpflow.models import SVGP
+from gpflow.likelihoods import Likelihood
+from gpflow.models import SVGP, GPModel
+from gpflow.models.training_mixins import ExternalDataTrainingLossMixin, Data
 from gpflow.posteriors import IndependentPosterior
 
 from .broadcasting_lik import BroadcastingLikelihood
@@ -18,32 +20,24 @@ jitter_level = config.default_jitter()
 # S: The number of Monte Carlo samples used in the model.
 # N: The number of data points.
 # D: The dimensionality of the output.
-class SGP(Module):
+class SGP(Module, ExternalDataTrainingLossMixin):
     """
     Scalable Gaussian process (SGP)
     X -> Xt = integrate(X) -> GP -> Y
     """
 
-    def __init__(self, pred_likelihood, pred_layer, num_samples=1, num_data=None):
+    def __init__(self, pred_likelihood: Likelihood, pred_layer: GPModel, num_samples=1, num_data=None):
         self.num_samples = num_samples
         self.num_data = num_data
-        self.pred_likelihood = BroadcastingLikelihood(pred_likelihood)
-        self.pred_layer = pred_layer
+        self.pred_likelihood: BroadcastingLikelihood = BroadcastingLikelihood(pred_likelihood)
+        self.pred_layer: GPModel = pred_layer
 
     def integrate(self, X, S=1):
         return tf.tile(X[None, :, :], [S, 1, 1]), None
 
-    def propagate(self, Xt, full_cov=False):
-        Fmean, Fvar = self.pred_layer.predict_f(Xt, full_cov=full_cov)
-        return Fmean, Fvar
-
-    def _build_predict(self, Xt, full_cov=False):
-        Fmeans, Fvars = self.propagate(Xt, full_cov=full_cov)
-        return Fmeans, Fvars
-
     def predict_y(self, Xnew, S=1):
         Xnewt = self.integrate(Xnew, S)[0]
-        Fmean, Fvar = self._build_predict(Xnewt, full_cov=False)
+        Fmean, Fvar = self.pred_layer.predict_f(Xnewt, full_cov=False)
         return self.pred_likelihood.predict_mean_and_var([], Fmean, Fvar)
 
 
@@ -52,22 +46,15 @@ class SMGP(SGP):
     Mixture of Gaussian processes, used for regression, density estimation, data association, etc
     '''
 
-    def __init__(self, assign_likelihood, pred_likelihood, pred_layer, assign_layer, K=3, num_samples=1, num_data=None):
+    def __init__(self, assign_likelihood: Likelihood, pred_likelihood: Likelihood, pred_layer: GPModel,
+                 assign_layer: GPModel, K=3, num_samples=1, num_data=None):
         SGP.__init__(self, pred_likelihood, pred_layer, num_samples, num_data)
-        self.assign_likelihood = BroadcastingLikelihood(assign_likelihood)
-        self.assign_layer = assign_layer
+        self.assign_likelihood: BroadcastingLikelihood = BroadcastingLikelihood(assign_likelihood)
+        self.assign_layer: GPModel = assign_layer
         self.K = K
 
-    def propagate_logassign(self, Xt, full_cov=False):
-        logassign_mean, logassign_var = self.assign_layer.predict_f(Xt, full_cov=full_cov)
-        return logassign_mean, logassign_var
-
-    def _build_predict_logassign(self, Xt, full_cov=False):
-        logassign_mean, logassign_var = self.propagate_logassign(Xt, full_cov=full_cov)
-        return logassign_mean, logassign_var
-
     def W_dist(self, Xt):
-        logassign_mean, logassign_var = self._build_predict_logassign(Xt)
+        logassign_mean, logassign_var = self.assign_layer.predict_f(Xt, full_cov=False)
         z = tf.random.normal(tf.shape(logassign_mean), dtype=float_type)
         log_assign = reparameterize(logassign_mean, logassign_var, z)
         log_assign = tf.reshape(log_assign, [tf.shape(Xt)[0] * tf.shape(Xt)[1], self.K])
@@ -75,13 +62,11 @@ class SMGP(SGP):
         return W_dist
 
     def E_log_p_Y(self, Xt, Y, W_SND):
-        Fmean, Fvar = self._build_predict(Xt, full_cov=False)
+        Fmean, Fvar = self.pred_layer.predict_f(Xt, full_cov=False)
         var_exp = self.pred_likelihood.variational_expectations(Xt, Fmean, Fvar, tf.cast(Y, dtype=tf.float64))
         var_exp *= tf.cast(W_SND, dtype=float_type)
         return tf.reduce_logsumexp(tf.reduce_sum(var_exp, 2), 0) - np.log(self.num_samples)
 
-    # TODO: Assign layer likelihood variance not updated if using bernoulli lik in SMGP
-    # @tf.function
     def _build_likelihood(self, X, Y):
         Xt = self.integrate(X, self.num_samples)[0]
         # sample from q(w)
@@ -94,9 +79,13 @@ class SMGP(SGP):
         # KL Divergence
         return L - (self.pred_layer.prior_kl() + self.assign_layer.prior_kl()) / self.num_data
 
+    def _training_loss(self, data: Data) -> tf.Tensor:
+        X, Y = data
+        return -self._build_likelihood(X, Y)
+
     def predict_assign(self, Xnew, S=1):
         Xt = self.integrate(Xnew, S)[0]
-        logassign_mean, logassign_var = self._build_predict_logassign(Xt)
+        logassign_mean, logassign_var = self.assign_layer.predict_f(Xt)
         assign = tf.nn.softmax(tf.exp(tf.reduce_mean(logassign_mean, 0)))
         return assign
 
@@ -105,7 +94,7 @@ class SMGP(SGP):
         W_dist = self.W_dist(Xt)
         W = W_dist.sample(1)[0, :, :]
         W_SND = tf.cast(tf.reshape(W, [S, tf.shape(Xt)[1], self.K]), dtype=float_type)
-        Fmean, Fvar = self._build_predict(Xt, full_cov=False)
+        Fmean, Fvar = self.pred_layer.predict_f(Xt, full_cov=False)
         mean, var = self.pred_likelihood.predict_mean_and_var([], Fmean, Fvar)
         z = tf.random.normal(tf.shape(Fmean), dtype=float_type)
         samples_y = reparameterize(mean, var, z)

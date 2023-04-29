@@ -1,31 +1,14 @@
-import os
-
 import gpflow.kernels
 import matplotlib.colors as mcolors
 import numpy as np
-import pandas as pd
 import tensorflow as tf
 from matplotlib import pyplot as plt
 from scipy.cluster.vq import kmeans
-from sklearn.model_selection import train_test_split
 
-from ModulatedGPs.likelihoods import GaussianModified
-from ModulatedGPs.models import SMGP, SVGPModified
-
-
-# TODO: Need to group boundaries and non boundaries together
-#  Or do multiclass classifiers
-
-def filter_by_pitch_x_pitch_y(data):
-    data = data[(data['pitchX'] >= -2) & (data['pitchX'] <= 2)]
-    data = data[(data['pitchY'] >= 0) & (data['pitchY'] <= 14)]
-    return data
-
-
-def load_csv_data_mipl():
-    csv_path = os.path.join("./", "mensIPLHawkeyeStats.csv")
-    return pd.read_csv(csv_path)
-
+from MixtureGPs.likelihoods import GaussianModified
+from MixtureGPs.models import SMGP, SVGPModified
+from utils.dataset_utils import load_cricket_jos_buttler
+from utils.training_utils import run_adam
 
 print(tf.test.is_built_with_cuda())
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
@@ -36,31 +19,8 @@ seed = 0
 tf.random.set_seed(seed)
 rng = np.random.default_rng(seed=seed)
 
-mipl_csv = load_csv_data_mipl()
-mipl_csv = filter_by_pitch_x_pitch_y(mipl_csv)
-
-seam = ['FAST_SEAM', 'MEDIUM_SEAM', 'SEAM']
-mipl_csv = mipl_csv[mipl_csv['batter'] == 'Jos Buttler']
-mipl_csv = mipl_csv[mipl_csv['bowlingStyle'].isin(seam)]
-mipl_csv = mipl_csv[mipl_csv['rightArmedBowl'] == True]
-
-categorical_attributes = []
-numerical_attributes = ['stumpsX', 'stumpsY']
-# numerical_attributes = ['stumpsX', 'stumpsY', 'pitchX', 'pitchY']
-all_columns = numerical_attributes + ['runs']
-
-mipl_csv = mipl_csv[all_columns]
-mipl_csv = mipl_csv[(mipl_csv['runs'] == 0) | (mipl_csv['runs'] == 6)]
-mipl_csv = mipl_csv.tail(1000)
-
-features = mipl_csv.drop(['runs'], axis=1)
-targets = mipl_csv['runs']
-
 name = 'JosButtler_RightArmSeam_'
-
-Xtrain, Xtest, Ytrain, Ytest = train_test_split(features, targets, test_size=0.2)
-Xtrain, Xtest, Ytrain, Ytest = Xtrain.to_numpy(), Xtest.to_numpy(), Ytrain.to_numpy(), Ytest.to_numpy()
-Ytrain, Ytest = Ytrain.reshape((len(Ytrain), 1)), Ytest.reshape((len(Ytest), 1))
+N, Xtrain, Ytrain, Xtest, numerical_attributes = load_cricket_jos_buttler()
 
 Xplot = rng.uniform([min(Xtrain[:, 0]) - 1, min(Xtrain[:, 1]) - 1], [max(Xtrain[:, 0]) + 1, max(Xtrain[:, 1]) + 1],
                     (200, 2))
@@ -77,15 +37,12 @@ dimY = 1  # Output dimensions
 num_ind = 25  # Inducing size for f
 K = 2
 
-# bernoulli_lik = Bernoulli()
 gaussian_lik = GaussianModified(D=K)
 
 input_dim = dimX
 pred_kernel = gpflow.kernels.SquaredExponential(variance=0.1, lengthscales=1.0)
 assign_kernel = gpflow.kernels.SquaredExponential(variance=0.1, lengthscales=1.0)
 Z, Z_assign = kmeans(Xtrain, num_ind, seed=0)[0], kmeans(Xtrain, num_ind, seed=1)[0]
-# Z, Z_assign = rng.uniform(-2 * np.pi, 2 * np.pi, size=(num_ind, 1)), rng.uniform(-2 * np.pi, 2 * np.pi,
-#                                                                                  size=(num_ind, 1))
 
 pred_layer = SVGPModified(kernel=pred_kernel, likelihood=gaussian_lik, inducing_variable=Z, num_latent_gps=K,
                           whiten=True)
@@ -93,38 +50,16 @@ assign_layer = SVGPModified(kernel=assign_kernel, likelihood=gaussian_lik, induc
                             whiten=True)
 
 # model definition
-model = SMGP(likelihood=gaussian_lik, pred_layer=pred_layer, assign_layer=assign_layer, K=K, num_samples=num_samples,
+model = SMGP(pred_likelihood=gaussian_lik, assign_likelihood=gaussian_lik, pred_layer=pred_layer,
+             assign_layer=assign_layer, K=K, num_samples=num_samples,
              num_data=num_data)
 
 dataset = tf.data.Dataset.from_tensor_slices((Xtrain, Ytrain))
 dataset = dataset.shuffle(buffer_size=num_data, seed=seed)
-dataset = dataset.batch(num_minibatch)
+dataset = dataset.batch(num_minibatch).repeat()
+train_iter = iter(dataset)
 
-optimizer = tf.optimizers.Adam(lr)
-
-print('{:>5s}'.format("iter") + '{:>24s}'.format("ELBO:"))
-iters = []
-elbos = []
-for i in range(1, num_iter + 1):
-    try:
-        for x_batch, y_batch in dataset:
-            with tf.GradientTape() as tape:
-                # Record gradients of the loss with respect to the trainable variables
-                elbo = model._build_likelihood(x_batch, y_batch)
-                loss_value = -elbo
-                gradients = tape.gradient(loss_value, model.trainable_variables)
-
-            # Use the optimizer to apply the gradients to update the trainable variables
-            optimizer.apply_gradients(zip(gradients, model.trainable_variables))
-
-            if i % 5 == 0 or i == 0:
-                print('{:>5d}'.format(i) + '{:>24.6f}'.format(elbo))
-                # gpflow.utilities.print_summary(model)
-                iters.append(i)
-                elbos.append(elbo)
-    except KeyboardInterrupt as e:
-        print("stopping training")
-        break
+iters, elbos = run_adam(model, num_iter, train_iter, lr, True)
 
 n_batches = max(int(Xplot.shape[0] / 500), 1)
 Ss_y, Ss_f = [], []
