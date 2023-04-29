@@ -38,12 +38,6 @@ def reparameterize(mean, var, z, full_cov=False):
         return tf.transpose(f, (0, 2, 1))  # SND
 
 
-def inv_probit(x: tf.Tensor) -> tf.Tensor:
-    jitter = 1e-3
-    # ensures output is strictly between 0 and 1
-    return 0.5 * (1.0 + tf.math.erf(x / np.sqrt(2.0))) * (1 - 2 * jitter) + jitter
-
-
 def load_categorical_data(rng: np.random.Generator):
     N, Ns, lambda_ = 500, 100, 0.1
 

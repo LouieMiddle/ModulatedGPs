@@ -1,4 +1,4 @@
-from .likelihoods import Gaussian
+from .likelihoods import GaussianModified
 import tensorflow as tf
 
 
@@ -14,7 +14,7 @@ class BroadcastingLikelihood:
     def __init__(self, likelihood):
         self.likelihood = likelihood
 
-        if isinstance(likelihood, Gaussian):
+        if isinstance(likelihood, GaussianModified):
             self.needs_broadcasting = False
         else:
             self.needs_broadcasting = True
@@ -37,7 +37,8 @@ class BroadcastingLikelihood:
                 return tf.reshape(flattened_result, [S, N, -1])
 
     def variational_expectations(self, X, Fmu, Fvar, Y):
-        f = lambda vars_SND, vars_ND: self.likelihood._variational_expectations([], vars_SND[0], vars_SND[1], vars_ND[0])
+        f = lambda vars_SND, vars_ND: self.likelihood._variational_expectations([], vars_SND[0], vars_SND[1],
+                                                                                vars_ND[0])
         return self._broadcast(f, [Fmu, Fvar], [Y])
 
     def predict_mean_and_var(self, X, Fmu, Fvar):

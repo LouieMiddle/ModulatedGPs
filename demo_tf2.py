@@ -5,7 +5,7 @@ import tensorflow as tf
 from matplotlib import pyplot as plt
 from scipy.cluster.vq import kmeans
 
-from ModulatedGPs.likelihoods import Gaussian
+from ModulatedGPs.likelihoods import GaussianModified
 from ModulatedGPs.models import SMGP, SVGPModified
 from ModulatedGPs.utils import load_multimodal_data
 
@@ -32,7 +32,7 @@ dimY = 1  # Output dimensions
 num_ind = 25  # Inducing size for f
 K = 3
 
-lik = Gaussian(D=K)
+lik = GaussianModified(D=K)
 
 input_dim = dimX
 pred_kernel = gpflow.kernels.SquaredExponential(variance=0.5, lengthscales=0.5)
@@ -46,7 +46,7 @@ assign_layer = SVGPModified(kernel=assign_kernel, likelihood=lik, inducing_varia
                             whiten=True)
 
 # model definition
-model = SMGP(likelihood=lik, pred_layer=pred_layer, assign_layer=assign_layer, K=K, num_samples=num_samples,
+model = SMGP(assign_likelihood=lik, pred_likelihood=lik, pred_layer=pred_layer, assign_layer=assign_layer, K=K, num_samples=num_samples,
              num_data=num_data)
 
 dataset = tf.data.Dataset.from_tensor_slices((Xtrain, Ytrain))

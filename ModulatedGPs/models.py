@@ -15,21 +15,19 @@ float_type = config.default_float()
 jitter_level = config.default_jitter()
 
 
-# Samples: The number of Monte Carlo samples used in the model.
+# S: The number of Monte Carlo samples used in the model.
 # N: The number of data points.
 # D: The dimensionality of the output.
-
 class SGP(Module):
     """
     Scalable Gaussian process (SGP)
     X -> Xt = integrate(X) -> GP -> Y
     """
 
-    def __init__(self, likelihood, pred_layer, num_samples=1, num_data=None):
+    def __init__(self, pred_likelihood, pred_layer, num_samples=1, num_data=None):
         self.num_samples = num_samples
         self.num_data = num_data
-        self.likelihood = BroadcastingLikelihood(likelihood)
-        # self.likelihood = likelihood
+        self.pred_likelihood = BroadcastingLikelihood(pred_likelihood)
         self.pred_layer = pred_layer
 
     def integrate(self, X, S=1):
@@ -46,7 +44,7 @@ class SGP(Module):
     def predict_y(self, Xnew, S=1):
         Xnewt = self.integrate(Xnew, S)[0]
         Fmean, Fvar = self._build_predict(Xnewt, full_cov=False)
-        return self.likelihood.predict_mean_and_var([], Fmean, Fvar)
+        return self.pred_likelihood.predict_mean_and_var([], Fmean, Fvar)
 
 
 class SMGP(SGP):
@@ -54,8 +52,9 @@ class SMGP(SGP):
     Mixture of Gaussian processes, used for regression, density estimation, data association, etc
     '''
 
-    def __init__(self, likelihood, pred_layer, assign_layer, K=3, num_samples=1, num_data=None):
-        SGP.__init__(self, likelihood, pred_layer, num_samples, num_data)
+    def __init__(self, assign_likelihood, pred_likelihood, pred_layer, assign_layer, K=3, num_samples=1, num_data=None):
+        SGP.__init__(self, pred_likelihood, pred_layer, num_samples, num_data)
+        self.assign_likelihood = BroadcastingLikelihood(assign_likelihood)
         self.assign_layer = assign_layer
         self.K = K
 
@@ -77,12 +76,12 @@ class SMGP(SGP):
 
     def E_log_p_Y(self, Xt, Y, W_SND):
         Fmean, Fvar = self._build_predict(Xt, full_cov=False)
-        var_exp = self.likelihood.variational_expectations(Xt, Fmean, Fvar, tf.cast(Y, dtype=tf.float64))
+        var_exp = self.pred_likelihood.variational_expectations(Xt, Fmean, Fvar, tf.cast(Y, dtype=tf.float64))
         var_exp *= tf.cast(W_SND, dtype=float_type)
         return tf.reduce_logsumexp(tf.reduce_sum(var_exp, 2), 0) - np.log(self.num_samples)
 
-    # TODO: Assign layer not updated if using bernoulli lik in SMGP
-    @tf.function
+    # TODO: Assign layer likelihood variance not updated if using bernoulli lik in SMGP
+    # @tf.function
     def _build_likelihood(self, X, Y):
         Xt = self.integrate(X, self.num_samples)[0]
         # sample from q(w)
@@ -107,7 +106,7 @@ class SMGP(SGP):
         W = W_dist.sample(1)[0, :, :]
         W_SND = tf.cast(tf.reshape(W, [S, tf.shape(Xt)[1], self.K]), dtype=float_type)
         Fmean, Fvar = self._build_predict(Xt, full_cov=False)
-        mean, var = self.likelihood.predict_mean_and_var([], Fmean, Fvar)
+        mean, var = self.pred_likelihood.predict_mean_and_var([], Fmean, Fvar)
         z = tf.random.normal(tf.shape(Fmean), dtype=float_type)
         samples_y = reparameterize(mean, var, z)
         samples_y = tf.reduce_sum(samples_y * W_SND, 2, keepdims=True)

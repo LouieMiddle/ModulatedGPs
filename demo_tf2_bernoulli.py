@@ -2,10 +2,11 @@ import gpflow.kernels
 import matplotlib.colors as mcolors
 import numpy as np
 import tensorflow as tf
+from gpflow.likelihoods import Bernoulli
 from matplotlib import pyplot as plt
 from scipy.cluster.vq import kmeans
 
-from ModulatedGPs.likelihoods import Gaussian, Bernoulli
+from ModulatedGPs.likelihoods import GaussianModified
 from ModulatedGPs.models import SMGP, SVGPModified
 from ModulatedGPs.utils import load_categorical_data
 
@@ -21,7 +22,7 @@ rng = np.random.default_rng(seed=seed)
 N, Xtrain, Ytrain, Xtest = load_categorical_data(rng)
 
 # Model configuration
-num_iter = 300  # Optimization iterations
+num_iter = 2000  # Optimization iterations
 lr = 0.005  # Learning rate for Adam opt
 num_minibatch = 500  # Batch size for stochastic opt
 num_samples = 25  # Number of MC samples
@@ -32,22 +33,25 @@ dimY = 1  # Output dimensions
 num_ind = 25  # Inducing size for f
 K = 3
 
-bernoulli_lik = Bernoulli()
-gaussian_lik = Gaussian(D=K)
-
 input_dim = dimX
-pred_kernel = gpflow.kernels.SquaredExponential(variance=0.01, lengthscales=1.0)
-assign_kernel = gpflow.kernels.SquaredExponential(variance=0.1, lengthscales=2.0)
+pred_kernel = gpflow.kernels.SquaredExponential(variance=0.1, lengthscales=1.0)
+assign_kernel = gpflow.kernels.SquaredExponential(variance=0.1, lengthscales=1.0)
 Z, Z_assign = kmeans(Xtrain, num_ind, seed=0)[0], kmeans(Xtrain, num_ind, seed=1)[0]
 # Z, Z_assign = rng.uniform(-2 * np.pi, 2 * np.pi, size=(num_ind, 1)), rng.uniform(-2 * np.pi, 2 * np.pi,
 #                                                                                  size=(num_ind, 1))
 
-pred_layer = SVGPModified(kernel=pred_kernel, likelihood=bernoulli_lik, inducing_variable=Z, num_latent_gps=K, whiten=True)
-assign_layer = SVGPModified(kernel=assign_kernel, likelihood=gaussian_lik, inducing_variable=Z_assign, num_latent_gps=K,
+bernoulli_lik = Bernoulli()
+gaussian_modified_lik = GaussianModified(D=K, trainable=False)
+
+pred_layer = SVGPModified(kernel=pred_kernel, likelihood=bernoulli_lik, inducing_variable=Z, num_latent_gps=K,
+                          whiten=True)
+assign_layer = SVGPModified(kernel=assign_kernel, likelihood=gaussian_modified_lik, inducing_variable=Z_assign,
+                            num_latent_gps=K,
                             whiten=True)
 
 # model definition
-model = SMGP(likelihood=bernoulli_lik, pred_layer=pred_layer, assign_layer=assign_layer, K=K, num_samples=num_samples,
+model = SMGP(assign_likelihood=gaussian_modified_lik, pred_likelihood=bernoulli_lik, pred_layer=pred_layer,
+             assign_layer=assign_layer, K=K, num_samples=num_samples,
              num_data=num_data)
 
 gpflow.utilities.print_summary(model)

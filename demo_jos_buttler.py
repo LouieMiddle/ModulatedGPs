@@ -9,7 +9,7 @@ from matplotlib import pyplot as plt
 from scipy.cluster.vq import kmeans
 from sklearn.model_selection import train_test_split
 
-from ModulatedGPs.likelihoods import Gaussian
+from ModulatedGPs.likelihoods import GaussianModified
 from ModulatedGPs.models import SMGP, SVGPModified
 
 
@@ -78,7 +78,7 @@ num_ind = 25  # Inducing size for f
 K = 2
 
 # bernoulli_lik = Bernoulli()
-gaussian_lik = Gaussian(D=K)
+gaussian_lik = GaussianModified(D=K)
 
 input_dim = dimX
 pred_kernel = gpflow.kernels.SquaredExponential(variance=0.1, lengthscales=1.0)
