@@ -7,7 +7,7 @@ from gpflow.models import VGP
 from matplotlib.ticker import MaxNLocator
 
 
-# TODO: Cite my man
+# From https://towardsdatascience.com/variational-gaussian-process-what-to-do-when-things-are-not-gaussian-41197039f3d4
 
 def optimise(model, maxiter=2000):
     """

@@ -33,12 +33,12 @@ dimY = 1  # Output dimensions
 num_ind = 25  # Inducing size for f
 K = 3
 
-lik = GaussianModified(D=K)
-
 input_dim = dimX
 pred_kernel = gpflow.kernels.SquaredExponential(variance=0.5, lengthscales=0.5)
 assign_kernel = gpflow.kernels.SquaredExponential(variance=0.1, lengthscales=1.0)
 Z, Z_assign = kmeans(Xtrain, num_ind, seed=0)[0], kmeans(Xtrain, num_ind, seed=1)[0]
+
+lik = GaussianModified(D=K)
 
 pred_layer = SVGPModified(kernel=pred_kernel, likelihood=lik, inducing_variable=Z, num_latent_gps=K, whiten=True)
 assign_layer = SVGPModified(kernel=assign_kernel, likelihood=lik, inducing_variable=Z_assign, num_latent_gps=K,
@@ -48,15 +48,19 @@ gpflow.set_trainable(pred_layer.inducing_variable, False)
 gpflow.set_trainable(assign_layer.inducing_variable, False)
 
 # model definition
-model = SMGP(assign_likelihood=lik, pred_likelihood=lik, pred_layer=pred_layer, assign_layer=assign_layer, K=K, num_samples=num_samples,
+model = SMGP(likelihood=lik, pred_layer=pred_layer, assign_layer=assign_layer, K=K, num_samples=num_samples,
              num_data=num_data)
+
+gpflow.utilities.print_summary(model)
 
 dataset = tf.data.Dataset.from_tensor_slices((Xtrain, Ytrain))
 dataset = dataset.shuffle(buffer_size=num_data, seed=seed)
 dataset = dataset.batch(num_minibatch).repeat()
 train_iter = iter(dataset)
 
-iters, elbos = run_adam(model, num_iter, train_iter, lr, True)
+iters, elbos = run_adam(model, num_iter, train_iter, lr, False)
+
+gpflow.utilities.print_summary(model)
 
 n_batches = max(int(Xtest.shape[0] / 500), 1)
 Ss_y, Ss_f = [], []

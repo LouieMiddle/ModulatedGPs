@@ -15,7 +15,9 @@ def load_cricket_jos_buttler():
 
     def load_csv_data_mipl():
         csv_path = os.path.join("../data", "mensIPLHawkeyeStats.csv")
-        return pd.read_csv(csv_path)
+        df = pd.read_csv(csv_path)
+        df['pitchX'] = -df['pitchX']
+        return df
 
     mipl_csv = load_csv_data_mipl()
     mipl_csv = filter_by_pitch_x_pitch_y(mipl_csv)

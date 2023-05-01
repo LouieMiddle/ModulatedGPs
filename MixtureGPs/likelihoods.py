@@ -38,6 +38,7 @@ class GaussianModified(ScalarLikelihood):
         return tf.reduce_sum(logdensities.gaussian(Y, Fmu, Fvar + self.variance), axis=-1)
 
     # NOTE: Even though the SVGP elbo uses this, the SVGP elbo is never called in the SMGP model
+    # This has been changed to match the original SMGP
     def _variational_expectations(self, X: TensorType, Fmu: TensorType, Fvar: TensorType, Y: TensorType) -> tf.Tensor:
         return -0.5 * np.log(2 * np.pi) - 0.5 * tf.math.log(self.variance) - 0.5 * (
                 (Y - Fmu) ** 2 + Fvar) / self.variance

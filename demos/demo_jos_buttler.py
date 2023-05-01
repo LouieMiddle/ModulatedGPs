@@ -37,23 +37,23 @@ dimY = 1  # Output dimensions
 num_ind = 25  # Inducing size for f
 K = 2
 
-gaussian_lik = GaussianModified(D=K)
-
 input_dim = dimX
 pred_kernel = gpflow.kernels.SquaredExponential(variance=0.1, lengthscales=1.0)
 assign_kernel = gpflow.kernels.SquaredExponential(variance=0.1, lengthscales=1.0)
 Z, Z_assign = kmeans(Xtrain, num_ind, seed=0)[0], kmeans(Xtrain, num_ind, seed=1)[0]
 
-pred_layer = SVGPModified(kernel=pred_kernel, likelihood=gaussian_lik, inducing_variable=Z, num_latent_gps=K,
+lik = GaussianModified(D=K)
+
+pred_layer = SVGPModified(kernel=pred_kernel, likelihood=lik, inducing_variable=Z, num_latent_gps=K,
                           whiten=True)
-assign_layer = SVGPModified(kernel=assign_kernel, likelihood=gaussian_lik, inducing_variable=Z_assign, num_latent_gps=K,
+assign_layer = SVGPModified(kernel=assign_kernel, likelihood=lik, inducing_variable=Z_assign, num_latent_gps=K,
                             whiten=True)
 
 gpflow.set_trainable(pred_layer.inducing_variable, False)
 gpflow.set_trainable(assign_layer.inducing_variable, False)
 
 # model definition
-model = SMGP(pred_likelihood=gaussian_lik, assign_likelihood=gaussian_lik, pred_layer=pred_layer,
+model = SMGP(likelihood=lik, pred_layer=pred_layer,
              assign_layer=assign_layer, K=K, num_samples=num_samples,
              num_data=num_data)
 
