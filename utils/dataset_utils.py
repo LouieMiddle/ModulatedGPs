@@ -5,39 +5,39 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 
 
-# TODO: Need to group boundaries and non boundaries together
-#  Or do multiclass classifiers
-def load_cricket_jos_buttler():
-    def filter_by_pitch_x_pitch_y(data):
-        data = data[(data['pitchX'] >= -2) & (data['pitchX'] <= 2)]
-        data = data[(data['pitchY'] >= 0) & (data['pitchY'] <= 14)]
-        return data
+def load_john_doe():
+    def load_john_doe_data():
+        csv_path = os.path.join("../data", "john_doe_dataset.csv")
+        return pd.read_csv(csv_path)
 
-    def load_csv_data_mipl():
-        csv_path = os.path.join("../data", "mensIPLHawkeyeStats.csv")
-        df = pd.read_csv(csv_path)
-        df['pitchX'] = -df['pitchX']
-        return df
+    def boundary_mapper(run_value):
+        if run_value in [0, 1]:
+            return 0
+        elif run_value in [4, 6]:
+            return 1
+        else:
+            raise ValueError("Invalid batterRuns value")
 
-    mipl_csv = load_csv_data_mipl()
-    mipl_csv = filter_by_pitch_x_pitch_y(mipl_csv)
+    john_doe = load_john_doe_data()
+
+    john_doe = john_doe[
+        (john_doe['batterRuns'] == 0) | (john_doe['batterRuns'] == 1) | (john_doe['batterRuns'] == 4) | (
+                john_doe['batterRuns'] == 6)]
+    john_doe['boundary'] = john_doe['batterRuns'].apply(boundary_mapper)
 
     seam = ['FAST_SEAM', 'MEDIUM_SEAM', 'SEAM']
-    mipl_csv = mipl_csv[mipl_csv['batter'] == 'Jos Buttler']
-    mipl_csv = mipl_csv[mipl_csv['bowlingStyle'].isin(seam)]
-    mipl_csv = mipl_csv[mipl_csv['rightArmedBowl'] == True]
+    john_doe = john_doe[john_doe['bowlingStyle'].isin(seam)]
+    john_doe = john_doe[john_doe['rightArmedBowl'] == True]
 
     categorical_attributes = []
     numerical_attributes = ['stumpsX', 'stumpsY']
     # numerical_attributes = ['stumpsX', 'stumpsY', 'pitchX', 'pitchY']
-    all_columns = numerical_attributes + ['runs']
+    all_columns = numerical_attributes + ['boundary']
 
-    mipl_csv = mipl_csv[all_columns]
-    mipl_csv = mipl_csv[(mipl_csv['runs'] == 0) | (mipl_csv['runs'] == 6)]
-    mipl_csv = mipl_csv.tail(1000)
+    john_doe = john_doe[all_columns]
 
-    features = mipl_csv.drop(['runs'], axis=1)
-    targets = mipl_csv['runs']
+    features = john_doe.drop(['boundary'], axis=1)
+    targets = john_doe['boundary']
 
     Xtrain, Xtest, Ytrain, Ytest = train_test_split(features, targets, test_size=0.2)
     Xtrain, Xtest, Ytrain, Ytest = Xtrain.to_numpy(), Xtest.to_numpy(), Ytrain.to_numpy(), Ytest.to_numpy()

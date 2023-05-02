@@ -5,7 +5,7 @@ def run_adam(model, num_iter, train_iter, lr, compile=True):
     training_loss = model.training_loss_closure(train_iter, compile=compile)
     optimizer = tf.optimizers.Adam(lr)
 
-    # @tf.function
+    @tf.function
     def optimization_step():
         optimizer.minimize(training_loss, model.trainable_variables)
 

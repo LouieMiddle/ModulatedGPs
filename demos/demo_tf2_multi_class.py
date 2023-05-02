@@ -5,7 +5,6 @@ import tensorflow as tf
 from matplotlib import pyplot as plt
 from scipy.cluster.vq import kmeans
 
-from MixtureGPs.likelihoods import GaussianModified
 from MixtureGPs.models import SMGP, SVGPModified
 from utils.dataset_utils import load_toy_categorical_data
 from utils.plotting_utils import plot_kernel
@@ -68,10 +67,9 @@ dataset = dataset.shuffle(buffer_size=num_data, seed=seed)
 dataset = dataset.batch(num_minibatch).repeat()
 train_iter = iter(dataset)
 
-iters, elbos = run_adam(model, num_iter, train_iter, lr, False)
+iters, elbos = run_adam(model, num_iter, train_iter, lr, compile=False)
 
 gpflow.utilities.print_summary(model)
-
 plot_kernel(pred_layer)
 plot_kernel(assign_layer)
 

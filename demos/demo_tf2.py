@@ -22,7 +22,7 @@ rng = np.random.default_rng(seed=seed)
 N, Xtrain, Ytrain, Xtest = load_toy_multimodal_data(rng)
 
 # Model configuration
-num_iter = 1000  # Optimization iterations
+num_iter = 2000  # Optimization iterations
 lr = 0.005  # Learning rate for Adam opt
 num_minibatch = 500  # Batch size for stochastic opt
 num_samples = 25  # Number of MC samples
@@ -58,7 +58,7 @@ dataset = dataset.shuffle(buffer_size=num_data, seed=seed)
 dataset = dataset.batch(num_minibatch).repeat()
 train_iter = iter(dataset)
 
-iters, elbos = run_adam(model, num_iter, train_iter, lr, False)
+iters, elbos = run_adam(model, num_iter, train_iter, lr, compile=True)
 
 gpflow.utilities.print_summary(model)
 

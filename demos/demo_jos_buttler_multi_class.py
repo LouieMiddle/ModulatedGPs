@@ -5,7 +5,6 @@ import tensorflow as tf
 from matplotlib import pyplot as plt
 from scipy.cluster.vq import kmeans
 
-from MixtureGPs.likelihoods import GaussianModified
 from MixtureGPs.models import SMGP, SVGPModified
 from utils.dataset_utils import load_john_doe
 from utils.training_utils import run_adam
@@ -42,7 +41,8 @@ pred_kernel = gpflow.kernels.SquaredExponential(variance=0.01, lengthscales=1.0)
 assign_kernel = gpflow.kernels.SquaredExponential(variance=0.1, lengthscales=1.0)
 Z, Z_assign = kmeans(Xtrain, num_ind, seed=0)[0], kmeans(Xtrain, num_ind, seed=1)[0]
 
-lik = GaussianModified(D=K)
+inv_link = gpflow.likelihoods.RobustMax(num_classes=K)
+lik = gpflow.likelihoods.MultiClass(num_classes=K, invlink=inv_link)
 
 pred_layer = SVGPModified(kernel=pred_kernel, likelihood=lik, inducing_variable=Z, num_latent_gps=K,
                           whiten=True)
