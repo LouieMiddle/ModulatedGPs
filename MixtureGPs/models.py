@@ -103,6 +103,26 @@ class SMGP(SGP):
         return samples_y, samples_f
 
 
+class SMGPModified(SMGP):
+    def __init__(self, likelihood: Likelihood, assign_likelihood: Likelihood, pred_layer: GPModel,
+                 assign_layer: GPModel, K=3, num_samples=1, num_data=None):
+        SMGP.__init__(self, likelihood, pred_layer, assign_layer, K, num_samples, num_data)
+        self.assign_likelihood = BroadcastingLikelihood(assign_likelihood)
+
+    def E_log_p_Y(self, Xt, Y, W_SND):
+        Fmean, Fvar = self.assign_layer.predict_f(Xt, full_cov=False)
+        var_exp = self.assign_likelihood.variational_expectations(Xt, Fmean, Fvar, tf.cast(Y, dtype=tf.float64))
+        var_exp *= tf.cast(W_SND, dtype=float_type)
+        E_log_p_A = tf.reduce_sum(var_exp, 2) - np.log(self.num_samples)
+
+        Fmean, Fvar = self.pred_layer.predict_f(Xt, full_cov=False)
+        var_exp = self.likelihood.variational_expectations(Xt, Fmean, Fvar, tf.cast(Y, dtype=tf.float64))
+        var_exp *= tf.cast(W_SND, dtype=float_type)
+        E_log_p_y = tf.reduce_sum(var_exp, 2) - np.log(self.num_samples)
+
+        return tf.reduce_logsumexp(E_log_p_A, 0) + tf.reduce_logsumexp(E_log_p_y, 0)
+
+
 class IndependentPosteriorSingleOutputModified(IndependentPosterior):
     # could almost be the same as IndependentPosteriorMultiOutput ...
     @inherit_check_shapes

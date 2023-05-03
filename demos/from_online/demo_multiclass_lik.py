@@ -8,12 +8,12 @@ import tensorflow as tf
 
 import gpflow
 from gpflow.ci_utils import reduce_in_tests
-from gpflow.utilities import print_summary, set_trainable
+from gpflow.utilities import set_trainable
 
 colors = ["#1f77b4", "#ff7f0e", "#2ca02c"]
 
 
-# Sourced from GPFlow notebooks
+# Sourced from GPFlow notebooks https://gpflow.github.io/GPflow/develop/notebooks/advanced/multiclass_classification.html
 
 def plot_posterior_predictions(m, X, Y):
     f = plt.figure(figsize=(12, 6))

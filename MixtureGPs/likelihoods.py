@@ -10,16 +10,13 @@ from gpflow.utilities.parameter_or_function import ParameterOrFunction
 
 
 class GaussianModified(ScalarLikelihood):
-    def __init__(self, variance=1e-0, D: int = None, trainable=True, **kwargs: Any) -> None:
+    def __init__(self, variance=1e-0, D: int = None, **kwargs: Any) -> None:
         super().__init__(**kwargs)
 
         if D is not None:
             variance = variance * np.ones((1, D))
 
-        variance = np.maximum(variance - 1e-6, np.finfo(np.float64).eps)
-        variance = variance + np.log(-np.expm1(-variance))
-        self.variance: Optional[ParameterOrFunction] = Parameter(variance, transform=gpflow.utilities.positive(),
-                                                                 trainable=trainable)
+        self.variance: Optional[ParameterOrFunction] = Parameter(variance, transform=gpflow.utilities.positive())
 
     def _scalar_log_prob(self, X: TensorType, F: TensorType, Y: TensorType) -> tf.Tensor:
         return logdensities.gaussian(Y, F, self.variance)

@@ -5,7 +5,8 @@ import tensorflow as tf
 from matplotlib import pyplot as plt
 from scipy.cluster.vq import kmeans
 
-from MixtureGPs.models import SMGP, SVGPModified
+from MixtureGPs.likelihoods import GaussianModified
+from MixtureGPs.models import SVGPModified, SMGPModified
 from utils.dataset_utils import load_john_doe
 from utils.training_utils import run_adam
 
@@ -18,14 +19,14 @@ seed = 0
 tf.random.set_seed(seed)
 rng = np.random.default_rng(seed=seed)
 
-name = 'JosButtler_RightArmSeam_'
+name = 'JohnDoe_RightArmSeam_'
 N, Xtrain, Ytrain, Xtest, numerical_attributes = load_john_doe()
 
 Xplot = rng.uniform([min(Xtrain[:, 0]) - 2, min(Xtrain[:, 1]) - 2], [max(Xtrain[:, 0]) + 2, max(Xtrain[:, 1]) + 2],
                     (200, 2))
 
 # Model configuration
-num_iter = 1000  # Optimization iterations
+num_iter = 100  # Optimization iterations
 lr = 0.005  # Learning rate for Adam opt
 num_minibatch = 500  # Batch size for stochastic opt
 num_samples = 25  # Number of MC samples
@@ -37,25 +38,23 @@ num_ind = 25  # Inducing size for f
 K = 2
 
 input_dim = dimX
-pred_kernel = gpflow.kernels.SquaredExponential(variance=0.01, lengthscales=1.0)
+pred_kernel = gpflow.kernels.SquaredExponential(variance=0.1, lengthscales=1.0)
 assign_kernel = gpflow.kernels.SquaredExponential(variance=0.1, lengthscales=1.0)
 Z, Z_assign = kmeans(Xtrain, num_ind, seed=0)[0], kmeans(Xtrain, num_ind, seed=1)[0]
 
 inv_link = gpflow.likelihoods.RobustMax(num_classes=K)
 lik = gpflow.likelihoods.MultiClass(num_classes=K, invlink=inv_link)
+assign_lik = GaussianModified(variance=0.5, D=K)
 
 pred_layer = SVGPModified(kernel=pred_kernel, likelihood=lik, inducing_variable=Z, num_latent_gps=K,
                           whiten=True)
-assign_layer = SVGPModified(kernel=assign_kernel, likelihood=lik, inducing_variable=Z_assign, num_latent_gps=K,
+assign_layer = SVGPModified(kernel=assign_kernel, likelihood=assign_lik, inducing_variable=Z_assign, num_latent_gps=K,
                             whiten=True)
 
-gpflow.set_trainable(pred_layer.inducing_variable, False)
-gpflow.set_trainable(assign_layer.inducing_variable, False)
-
 # model definition
-model = SMGP(likelihood=lik, pred_layer=pred_layer,
-             assign_layer=assign_layer, K=K, num_samples=num_samples,
-             num_data=num_data)
+model = SMGPModified(likelihood=lik, assign_likelihood=assign_lik, pred_layer=pred_layer,
+                     assign_layer=assign_layer, K=K, num_samples=num_samples,
+                     num_data=num_data)
 
 gpflow.utilities.print_summary(model)
 
@@ -91,8 +90,8 @@ for i in range(1, 10):
 
 ax[0].scatter(Xtrain[:, 0], Xtrain[:, 1], Ytrain, s=1)
 ax[0].set_title("Raw Data")
-ax[0].set_xlabel('x1')
-ax[0].set_ylabel('x2')
+ax[0].set_xlabel('StumpsX')
+ax[0].set_ylabel('StumpsY')
 ax[0].set_zlabel('y')
 ax[0].grid()
 
@@ -102,8 +101,8 @@ ax[1].scatter(Xt_tiled[:, 0:1], Xt_tiled[:, 1:2], samples_f_stack.flatten(), mar
               color=mcolors.TABLEAU_COLORS['tab:blue'])
 ax[1].scatter(Xtrain[:, 0], Xtrain[:, 1], Ytrain, marker='x', color='black', alpha=0.1)
 ax[1].set_title("Mixture of GPs")
-ax[1].set_xlabel('x1')
-ax[1].set_ylabel('x2')
+ax[1].set_xlabel('StumpsX')
+ax[1].set_ylabel('StumpsY')
 ax[1].set_zlabel('y')
 ax[1].set_ylim(1.2 * min(Ytrain), 1.2 * max(Ytrain))
 ax[1].grid()
@@ -112,8 +111,8 @@ assign_ = model.predict_assign(Xplot)
 for i in range(K):
     ax[2].scatter(Xplot[:, 0], Xplot[:, 1], assign_[:, i], color=colors[i], s=1)
 ax[2].set_title("Assignment Plot")
-ax[2].set_xlabel('x1')
-ax[2].set_ylabel('x2')
+ax[2].set_xlabel('StumpsX')
+ax[2].set_ylabel('StumpsY')
 ax[2].set_zlabel('y')
 ax[2].grid()
 
@@ -122,8 +121,8 @@ fmean_ = np.mean(fmean, 0)
 for i in range(K):
     ax[3].scatter(Xplot[:, 0], Xplot[:, 1], fmean_[:, i], color=colors[i], s=1)
 ax[3].set_title("Prediction Plot")
-ax[3].set_xlabel('x1')
-ax[3].set_ylabel('x2')
+ax[3].set_xlabel('StumpsX')
+ax[3].set_ylabel('StumpsY')
 ax[3].set_zlabel('y')
 ax[3].grid()
 
@@ -182,4 +181,4 @@ for i in range(2):
 
 plt.tight_layout()
 plt.show()
-fig.savefig('../figs/demo_' + name + "_".join(numerical_attributes) + '.png')
+fig.savefig('../figs/demo_' + name + "_".join(numerical_attributes) + '_multi_class.png')

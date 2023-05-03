@@ -5,9 +5,9 @@ import tensorflow as tf
 from matplotlib import pyplot as plt
 from scipy.cluster.vq import kmeans
 
-from MixtureGPs.models import SMGP, SVGPModified
-from utils.dataset_utils import load_toy_categorical_data
-from utils.plotting_utils import plot_kernel
+from MixtureGPs.likelihoods import GaussianModified
+from MixtureGPs.models import SVGPModified, SMGPModified
+from utils.dataset_utils import load_toy_multimodal_data
 from utils.training_utils import run_adam
 
 print(tf.test.is_built_with_cuda())
@@ -19,13 +19,11 @@ seed = 0
 tf.random.set_seed(seed)
 rng = np.random.default_rng(seed=seed)
 
-K = 3
-
-N, Xtrain, Ytrain, Xtest = load_toy_categorical_data(rng)
+N, Xtrain, Ytrain, Xtest = load_toy_multimodal_data(rng)
 
 # Model configuration
-num_iter = 1000  # Optimization iterations
-lr = 0.01  # Learning rate for Adam opt
+num_iter = 4000  # Optimization iterations
+lr = 0.005  # Learning rate for Adam opt
 num_minibatch = 500  # Batch size for stochastic opt
 num_samples = 25  # Number of MC samples
 num_predict_samples = 100  # Number of prediction samples
@@ -33,32 +31,24 @@ num_data = Xtrain.shape[0]  # Training size
 dimX = Xtrain.shape[1]  # Input dimensions
 dimY = 1  # Output dimensions
 num_ind = 25  # Inducing size for f
+K = 3
 
 input_dim = dimX
-pred_kernel = gpflow.kernels.SquaredExponential(variance=0.5, lengthscales=2.0) + gpflow.kernels.White(variance=0.01)
-assign_kernel = gpflow.kernels.SquaredExponential(variance=0.1, lengthscales=1.0) + gpflow.kernels.White(variance=0.01)
+pred_kernel = gpflow.kernels.SquaredExponential(variance=0.5, lengthscales=0.5)
+assign_kernel = gpflow.kernels.SquaredExponential(variance=0.1, lengthscales=1.0)
 Z, Z_assign = kmeans(Xtrain, num_ind, seed=0)[0], kmeans(Xtrain, num_ind, seed=1)[0]
 
-invlink = gpflow.likelihoods.RobustMax(K)
-# TODO: Need the multiclass likelihood, to represent, the NUMBER of multiclass GPs
-lik = gpflow.likelihoods.MultiClass(K, invlink=invlink)
+lik = GaussianModified(variance=0.5, D=K)
+assign_lik = GaussianModified(variance=0.5, D=K)
 
-# These SVGPs as far as I can see, do NOT use the likelihood - just setting to use GPFlow implementation
-pred_layer = SVGPModified(kernel=pred_kernel, likelihood=lik, inducing_variable=Z, num_latent_gps=K,
-                          whiten=True)
-assign_layer = SVGPModified(kernel=assign_kernel, likelihood=lik, inducing_variable=Z_assign,
-                            num_latent_gps=K,
+pred_layer = SVGPModified(kernel=pred_kernel, likelihood=lik, inducing_variable=Z, num_latent_gps=K, whiten=True)
+assign_layer = SVGPModified(kernel=assign_kernel, likelihood=assign_lik, inducing_variable=Z_assign, num_latent_gps=K,
                             whiten=True)
 
-gpflow.set_trainable(pred_layer.inducing_variable, False)
-gpflow.set_trainable(assign_layer.inducing_variable, False)
-# gpflow.set_trainable(pred_kernel.kernels[1].variance, False)
-# gpflow.set_trainable(assign_kernel.kernels[1].variance, False)
-
 # model definition
-model = SMGP(likelihood=lik, pred_layer=pred_layer,
-             assign_layer=assign_layer, K=K, num_samples=num_samples,
-             num_data=num_data)
+model = SMGPModified(likelihood=lik, assign_likelihood=assign_lik, pred_layer=pred_layer, assign_layer=assign_layer,
+                     K=K, num_samples=num_samples,
+                     num_data=num_data)
 
 gpflow.utilities.print_summary(model)
 
@@ -67,11 +57,9 @@ dataset = dataset.shuffle(buffer_size=num_data, seed=seed)
 dataset = dataset.batch(num_minibatch).repeat()
 train_iter = iter(dataset)
 
-iters, elbos = run_adam(model, num_iter, train_iter, lr, compile=False)
+iters, elbos = run_adam(model, num_iter, train_iter, lr, compile=True)
 
 gpflow.utilities.print_summary(model)
-plot_kernel(pred_layer)
-plot_kernel(assign_layer)
 
 n_batches = max(int(Xtest.shape[0] / 500), 1)
 Ss_y, Ss_f = [], []
@@ -122,5 +110,5 @@ ax[1, 1].set_ylabel('Pred. of GP experts')
 ax[1, 1].grid()
 
 plt.tight_layout()
-plt.savefig('../figs/demo_tf2_bernoulli.png')
+plt.savefig('../figs/demo_tf2_modified.png')
 plt.show()

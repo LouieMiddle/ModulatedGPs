@@ -1,8 +1,8 @@
+import gpflow
 import numpy as np
 import tensorflow as tf
-import gpflow
 
-# TODO: Cite my man
+# From https://towardsdatascience.com/sparse-and-variational-gaussian-process-what-to-do-when-data-is-large-2d3959f430e7
 
 # Define input data
 X = tf.random.uniform(shape=[10, 1], minval=-2.0, maxval=2.0, dtype=tf.float64)

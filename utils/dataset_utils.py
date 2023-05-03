@@ -5,6 +5,36 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 
 
+def load_john_doe_runs():
+    def load_john_doe_data():
+        csv_path = os.path.join("../data", "john_doe_dataset.csv")
+        return pd.read_csv(csv_path)
+
+    john_doe = load_john_doe_data()
+
+    john_doe = john_doe[(john_doe['batterRuns'] == 0) | (john_doe['batterRuns'] == 1) | (john_doe['batterRuns'] == 2)]
+
+    seam = ['FAST_SEAM', 'MEDIUM_SEAM', 'SEAM']
+    john_doe = john_doe[john_doe['bowlingStyle'].isin(seam)]
+    john_doe = john_doe[john_doe['rightArmedBowl'] == True]
+
+    categorical_attributes = []
+    numerical_attributes = ['stumpsX', 'stumpsY']
+    # numerical_attributes = ['stumpsX', 'stumpsY', 'pitchX', 'pitchY']
+    all_columns = numerical_attributes + ['batterRuns']
+
+    john_doe = john_doe[all_columns]
+
+    features = john_doe.drop(['batterRuns'], axis=1)
+    targets = john_doe['batterRuns']
+
+    Xtrain, Xtest, Ytrain, Ytest = train_test_split(features, targets, test_size=0.2)
+    Xtrain, Xtest, Ytrain, Ytest = Xtrain.to_numpy(), Xtest.to_numpy(), Ytrain.to_numpy(), Ytest.to_numpy()
+    Ytrain, Ytest = Ytrain.reshape((len(Ytrain), 1)), Ytest.reshape((len(Ytest), 1))
+
+    return len(Xtrain), Xtrain, Ytrain, Xtest, numerical_attributes
+
+
 def load_john_doe():
     def load_john_doe_data():
         csv_path = os.path.join("../data", "john_doe_dataset.csv")
@@ -46,7 +76,7 @@ def load_john_doe():
     return len(Xtrain), Xtrain, Ytrain, Xtest, numerical_attributes
 
 
-def load_toy_categorical_data(rng: np.random.Generator):
+def load_toy_data_categorical(rng: np.random.Generator):
     N, Ns, lambda_ = 500, 100, 0.1
 
     x_min = -6.0

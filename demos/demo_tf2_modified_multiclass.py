@@ -6,8 +6,8 @@ from matplotlib import pyplot as plt
 from scipy.cluster.vq import kmeans
 
 from MixtureGPs.likelihoods import GaussianModified
-from MixtureGPs.models import SMGP, SVGPModified
-from utils.dataset_utils import load_toy_multimodal_data
+from MixtureGPs.models import SVGPModified, SMGPModified
+from utils.dataset_utils import load_toy_data_categorical
 from utils.training_utils import run_adam
 
 print(tf.test.is_built_with_cuda())
@@ -19,7 +19,9 @@ seed = 0
 tf.random.set_seed(seed)
 rng = np.random.default_rng(seed=seed)
 
-N, Xtrain, Ytrain, Xtest = load_toy_multimodal_data(rng)
+N, Xtrain, Ytrain, Xtest = load_toy_data_categorical(rng)
+
+Xplot = rng.uniform(min(Xtrain[:, 0]) - 2, max(Xtrain[:, 0]) + 2, (200, 1))
 
 # Model configuration
 num_iter = 2000  # Optimization iterations
@@ -31,22 +33,26 @@ num_data = Xtrain.shape[0]  # Training size
 dimX = Xtrain.shape[1]  # Input dimensions
 dimY = 1  # Output dimensions
 num_ind = 25  # Inducing size for f
-K = 3
+K = 2
 
 input_dim = dimX
-pred_kernel = gpflow.kernels.SquaredExponential(variance=0.5, lengthscales=0.5)
+pred_kernel = gpflow.kernels.SquaredExponential(variance=0.1, lengthscales=1.0)
 assign_kernel = gpflow.kernels.SquaredExponential(variance=0.1, lengthscales=1.0)
 Z, Z_assign = kmeans(Xtrain, num_ind, seed=0)[0], kmeans(Xtrain, num_ind, seed=1)[0]
 
-lik = GaussianModified(variance=0.5, D=K)
+inv_link = gpflow.likelihoods.RobustMax(num_classes=K)
+lik = gpflow.likelihoods.MultiClass(num_classes=K, invlink=inv_link)
+assign_lik = GaussianModified(variance=0.5, D=K)
 
-pred_layer = SVGPModified(kernel=pred_kernel, likelihood=lik, inducing_variable=Z, num_latent_gps=K, whiten=True)
-assign_layer = SVGPModified(kernel=assign_kernel, likelihood=lik, inducing_variable=Z_assign, num_latent_gps=K,
+pred_layer = SVGPModified(kernel=pred_kernel, likelihood=lik, inducing_variable=Z, num_latent_gps=K,
+                          whiten=True)
+assign_layer = SVGPModified(kernel=assign_kernel, likelihood=assign_lik, inducing_variable=Z_assign, num_latent_gps=K,
                             whiten=True)
 
 # model definition
-model = SMGP(likelihood=lik, pred_layer=pred_layer, assign_layer=assign_layer, K=K, num_samples=num_samples,
-             num_data=num_data)
+model = SMGPModified(likelihood=lik, assign_likelihood=assign_lik, pred_layer=pred_layer,
+                     assign_layer=assign_layer, K=K, num_samples=num_samples,
+                     num_data=num_data)
 
 gpflow.utilities.print_summary(model)
 
@@ -55,22 +61,23 @@ dataset = dataset.shuffle(buffer_size=num_data, seed=seed)
 dataset = dataset.batch(num_minibatch).repeat()
 train_iter = iter(dataset)
 
-iters, elbos = run_adam(model, num_iter, train_iter, lr, compile=False)
+iters, elbos = run_adam(model, num_iter, train_iter, lr, compile=True)
 
 gpflow.utilities.print_summary(model)
 
-n_batches = max(int(Xtest.shape[0] / 500), 1)
+n_batches = max(int(Xplot.shape[0] / 500), 1)
 Ss_y, Ss_f = [], []
-for X_batch in np.array_split(Xtest, n_batches):
+for X_batch in np.array_split(Xplot, n_batches):
     samples_y, samples_f = model.predict_samples(X_batch, S=num_predict_samples)
     Ss_y.append(samples_y)
     Ss_f.append(samples_f)
 samples_y, samples_f = np.hstack(Ss_y), np.hstack(Ss_f)
 mu_avg, fmu_avg = np.mean(samples_y, 0), np.mean(samples_f, 0)
-samples_y_stack = np.reshape(samples_y, (num_predict_samples * Xtest.shape[0], -1))
-samples_f_stack = np.reshape(samples_f, (num_predict_samples * Xtest.shape[0], -1))
-Xt_tiled = np.tile(Xtest, [num_predict_samples, 1])
+samples_y_stack = np.reshape(samples_y, (num_predict_samples * Xplot.shape[0], -1))
+samples_f_stack = np.reshape(samples_f, (num_predict_samples * Xplot.shape[0], -1))
+Xt_tiled = np.tile(Xplot, [num_predict_samples, 1])
 
+# Plotting results
 f, ax = plt.subplots(2, 2, figsize=(14, 8))
 
 ax[0, 0].scatter(Xt_tiled.flatten(), samples_y_stack.flatten(), marker='+', alpha=0.01,
@@ -108,5 +115,5 @@ ax[1, 1].set_ylabel('Pred. of GP experts')
 ax[1, 1].grid()
 
 plt.tight_layout()
-plt.savefig('../figs/demo_tf2.png')
+plt.savefig('../figs/demo_tf2_modified_multiclass.png')
 plt.show()
