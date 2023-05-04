@@ -85,7 +85,7 @@ class SMGP(SGP):
     def predict_assign(self, Xnew, S=1):
         Xt = self.integrate(Xnew, S)[0]
         logassign_mean, logassign_var = self.assign_layer.predict_f(Xt)
-        assign = tf.nn.softmax(tf.exp(tf.reduce_mean(logassign_mean, 0)))
+        assign = tf.nn.softmax(tf.reduce_mean(logassign_mean, 0))
         return assign
 
     def predict_samples(self, Xnew, S=1):

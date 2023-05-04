@@ -6,8 +6,8 @@ from matplotlib import pyplot as plt
 from scipy.cluster.vq import kmeans
 
 from MixtureGPs.likelihoods import GaussianModified
-from MixtureGPs.models import SVGPModified, SMGPModified
-from utils.dataset_utils import load_john_doe
+from MixtureGPs.models import SMGP, SVGPModified, SMGPModified
+from utils.dataset_utils import load_toy_2d_data_categorical
 from utils.training_utils import run_adam
 
 print(tf.test.is_built_with_cuda())
@@ -19,12 +19,7 @@ seed = 0
 tf.random.set_seed(seed)
 rng = np.random.default_rng(seed=seed)
 
-name = 'JohnDoe_RightArmSeam_'
-N, Xtrain, Ytrain, Xtest, numerical_attributes = load_john_doe()
-
-Xplot = rng.uniform([min(Xtrain[:, 0]) - 1.5, min(Xtrain[:, 1]) - 1.5],
-                    [max(Xtrain[:, 0]) + 1.5, max(Xtrain[:, 1]) + 1.5],
-                    (500, 2))
+N, Xtrain, Ytrain, Xtest = load_toy_2d_data_categorical(rng)
 
 # Model configuration
 num_iter = 2000  # Optimization iterations
@@ -68,20 +63,20 @@ iters, elbos = run_adam(model, num_iter, train_iter, lr, compile=True)
 
 gpflow.utilities.print_summary(model)
 
-n_batches = max(int(Xplot.shape[0] / 500), 1)
+n_batches = max(int(Xtrain.shape[0] / 500), 1)
 Ss_y, Ss_f = [], []
-for X_batch in np.array_split(Xplot, n_batches):
+for X_batch in np.array_split(Xtrain, n_batches):
     samples_y, samples_f = model.predict_samples(X_batch, S=num_predict_samples)
     Ss_y.append(samples_y)
     Ss_f.append(samples_f)
 samples_y, samples_f = np.hstack(Ss_y), np.hstack(Ss_f)
 mu_avg, fmu_avg = np.mean(samples_y, 0), np.mean(samples_f, 0)
-samples_y_stack = np.reshape(samples_y, (num_predict_samples * Xplot.shape[0], -1))
-samples_f_stack = np.reshape(samples_f, (num_predict_samples * Xplot.shape[0], -1))
-Xt_tiled = np.tile(Xplot, [num_predict_samples, 1])
+samples_y_stack = np.reshape(samples_y, (num_predict_samples * Xtrain.shape[0], -1))
+samples_f_stack = np.reshape(samples_f, (num_predict_samples * Xtrain.shape[0], -1))
+Xt_tiled = np.tile(Xtrain, [num_predict_samples, 1])
 
 # Plotting results
-fig = plt.figure(figsize=(16, 9))
+fig = plt.figure(figsize=(16, 10))
 ax = []
 for i in range(1, 10):
     if i > 4:
@@ -91,8 +86,8 @@ for i in range(1, 10):
 
 ax[0].scatter(Xtrain[:, 0], Xtrain[:, 1], Ytrain, s=1)
 ax[0].set_title("Raw Data")
-ax[0].set_xlabel('StumpsX')
-ax[0].set_ylabel('StumpsY')
+ax[0].set_xlabel('x1')
+ax[0].set_ylabel('x2')
 ax[0].set_zlabel('y')
 ax[0].grid()
 
@@ -102,28 +97,28 @@ ax[1].scatter(Xt_tiled[:, 0:1], Xt_tiled[:, 1:2], samples_f_stack.flatten(), mar
               color=mcolors.TABLEAU_COLORS['tab:blue'])
 ax[1].scatter(Xtrain[:, 0], Xtrain[:, 1], Ytrain, marker='x', color='black', alpha=0.1)
 ax[1].set_title("Mixture of GPs")
-ax[1].set_xlabel('StumpsX')
-ax[1].set_ylabel('StumpsY')
+ax[1].set_xlabel('x1')
+ax[1].set_ylabel('x2')
 ax[1].set_zlabel('y')
 ax[1].set_ylim(1.2 * min(Ytrain), 1.2 * max(Ytrain))
 ax[1].grid()
 
-assign_ = model.predict_assign(Xplot)
+assign_ = model.predict_assign(Xtrain)
 for i in range(K):
-    ax[2].scatter(Xplot[:, 0], Xplot[:, 1], assign_[:, i], color=colors[i], s=1)
+    ax[2].scatter(Xtrain[:, 0], Xtrain[:, 1], assign_[:, i], color=colors[i], s=1)
 ax[2].set_title("Assignment Plot")
-ax[2].set_xlabel('StumpsX')
-ax[2].set_ylabel('StumpsY')
+ax[2].set_xlabel('x1')
+ax[2].set_ylabel('x2')
 ax[2].set_zlabel('y')
 ax[2].grid()
 
-fmean, _ = model.predict_y(Xplot)
+fmean, _ = model.predict_y(Xtrain)
 fmean_ = np.mean(fmean, 0)
 for i in range(K):
-    ax[3].scatter(Xplot[:, 0], Xplot[:, 1], fmean_[:, i], color=colors[i], s=1)
+    ax[3].scatter(Xtrain[:, 0], Xtrain[:, 1], fmean_[:, i], color=colors[i], s=1)
 ax[3].set_title("Prediction Plot")
-ax[3].set_xlabel('StumpsX')
-ax[3].set_ylabel('StumpsY')
+ax[3].set_xlabel('x1')
+ax[3].set_ylabel('x2')
 ax[3].set_zlabel('y')
 ax[3].grid()
 
@@ -132,21 +127,21 @@ ax[4].set_xlabel('Iterations')
 ax[4].set_ylabel('ELBO')
 ax[4].grid()
 
-stumpsX_const_value = -0.25
-stumpsY_const_value = 0.75
+stumpsX_const_value = 0.0
+stumpsY_const_value = 0.0
 
-Xtest_stumpsX = np.c_[Xplot[:, 0], stumpsY_const_value * np.ones(len(Xplot[:, 0]))]
-Xtest_stumpsY = np.c_[stumpsX_const_value * np.ones(len(Xplot[:, 1])), Xplot[:, 1]]
+Xtest_stumpsX = np.c_[Xtest[:, 0], stumpsY_const_value * np.ones(len(Xtest[:, 0]))]
+Xtest_stumpsY = np.c_[stumpsX_const_value * np.ones(len(Xtest[:, 1])), Xtest[:, 1]]
 
 Xtests = [Xtest_stumpsX, Xtest_stumpsY]
 
 for i in range(2):
     if i == 0:
-        ax[i + 5].set_title("StumpsY Constant Value = " + str(stumpsY_const_value))
-        ax[i + 5].set_xlabel('StumpsX')
+        ax[i + 5].set_title("x2 Constant Value = " + str(stumpsY_const_value))
+        ax[i + 5].set_xlabel('x1')
     elif i == 1:
-        ax[i + 5].set_title("StumpsX Constant Value = " + str(stumpsX_const_value))
-        ax[i + 5].set_xlabel('StumpsY')
+        ax[i + 5].set_title("x1 Constant Value = " + str(stumpsX_const_value))
+        ax[i + 5].set_xlabel('x2')
 
     assign_ = model.predict_assign(Xtests[i])
     ax[i + 5].plot(Xtests[i][:, i], assign_, 'o', markersize=1)
@@ -155,11 +150,11 @@ for i in range(2):
 
 for i in range(2):
     if i == 0:
-        ax[i + 7].set_title("StumpsY Constant Value = " + str(stumpsY_const_value))
-        ax[i + 7].set_xlabel('StumpsX')
+        ax[i + 7].set_title("x2 Constant Value = " + str(stumpsY_const_value))
+        ax[i + 7].set_xlabel('x1')
     elif i == 1:
-        ax[i + 7].set_title("StumpsX Constant Value = " + str(stumpsX_const_value))
-        ax[i + 7].set_xlabel('StumpsY')
+        ax[i + 7].set_title("x1 Constant Value = " + str(stumpsX_const_value))
+        ax[i + 7].set_xlabel('x2')
 
     fmean, fvar = model.predict_y(Xtests[i])
     fmean_, fvar_ = np.mean(fmean, 0), np.mean(fvar, 0)
@@ -182,4 +177,4 @@ for i in range(2):
 
 plt.tight_layout()
 plt.show()
-fig.savefig('../figs/demo_' + name + "_".join(numerical_attributes) + '_multi_class.png')
+fig.savefig('../figs/demo_tf2_2d_modified_multiclass.png')

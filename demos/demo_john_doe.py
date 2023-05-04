@@ -22,11 +22,12 @@ rng = np.random.default_rng(seed=seed)
 name = 'JohnDoe_RightArmSeam_'
 N, Xtrain, Ytrain, Xtest, numerical_attributes = load_john_doe_runs()
 
-Xplot = rng.uniform([min(Xtrain[:, 0]) - 2, min(Xtrain[:, 1]) - 2], [max(Xtrain[:, 0]) + 2, max(Xtrain[:, 1]) + 2],
-                    (200, 2))
+Xplot = rng.uniform([min(Xtrain[:, 0]) - 1.5, min(Xtrain[:, 1]) - 1.5],
+                    [max(Xtrain[:, 0]) + 1.5, max(Xtrain[:, 1]) + 1.5],
+                    (500, 2))
 
 # Model configuration
-num_iter = 2000  # Optimization iterations
+num_iter = 10000  # Optimization iterations
 lr = 0.005  # Learning rate for Adam opt
 num_minibatch = 500  # Batch size for stochastic opt
 num_samples = 25  # Number of MC samples
@@ -35,7 +36,7 @@ num_data = Xtrain.shape[0]  # Training size
 dimX = Xtrain.shape[1]  # Input dimensions
 dimY = 1  # Output dimensions
 num_ind = 25  # Inducing size for f
-K = 3
+K = 4
 
 input_dim = dimX
 pred_kernel = gpflow.kernels.SquaredExponential(variance=0.1, lengthscales=1.0)
@@ -78,7 +79,7 @@ samples_f_stack = np.reshape(samples_f, (num_predict_samples * Xplot.shape[0], -
 Xt_tiled = np.tile(Xplot, [num_predict_samples, 1])
 
 # Plotting results
-fig = plt.figure(figsize=(16, 9))
+fig = plt.figure(figsize=(16, 10))
 ax = []
 for i in range(1, 10):
     if i > 4:

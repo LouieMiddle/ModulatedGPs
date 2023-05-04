@@ -12,7 +12,9 @@ def load_john_doe_runs():
 
     john_doe = load_john_doe_data()
 
-    john_doe = john_doe[(john_doe['batterRuns'] == 0) | (john_doe['batterRuns'] == 1) | (john_doe['batterRuns'] == 2)]
+    john_doe = john_doe[
+        (john_doe['batterRuns'] == 0) | (john_doe['batterRuns'] == 1) | (john_doe['batterRuns'] == 4) | (
+                    john_doe['batterRuns'] == 6)]
 
     seam = ['FAST_SEAM', 'MEDIUM_SEAM', 'SEAM']
     john_doe = john_doe[john_doe['bowlingStyle'].isin(seam)]
@@ -69,6 +71,9 @@ def load_john_doe():
     features = john_doe.drop(['boundary'], axis=1)
     targets = john_doe['boundary']
 
+    unique, counts = np.unique(targets, return_counts=True)
+    percent = counts[0] / (counts[0] + counts[1])
+
     Xtrain, Xtest, Ytrain, Ytest = train_test_split(features, targets, test_size=0.2)
     Xtrain, Xtest, Ytrain, Ytest = Xtrain.to_numpy(), Xtest.to_numpy(), Ytrain.to_numpy(), Ytest.to_numpy()
     Ytrain, Ytest = Ytrain.reshape((len(Ytrain), 1)), Ytest.reshape((len(Ytest), 1))
@@ -95,7 +100,7 @@ def load_toy_data_categorical(rng: np.random.Generator):
 def load_toy_multimodal_data(rng: np.random.Generator):
     N, Ns = 1500, 100
 
-    epsilon = rng.normal(0, 0.2, (N // 3, 1))
+    epsilon = rng.normal(0, 0.1, (N // 3, 1))
 
     Xtrain = rng.uniform(low=-2 * np.pi, high=2 * np.pi, size=(N, 1))
 
