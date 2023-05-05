@@ -6,7 +6,7 @@ from matplotlib import pyplot as plt
 from scipy.cluster.vq import kmeans
 
 from MixtureGPs.likelihoods import GaussianModified
-from MixtureGPs.models import SMGP, SVGPModified, SMGPModified
+from MixtureGPs.models import SVGPModified, SMGPModified
 from utils.dataset_utils import load_toy_2d_data_categorical
 from utils.training_utils import run_adam
 
@@ -76,59 +76,59 @@ samples_f_stack = np.reshape(samples_f, (num_predict_samples * Xtrain.shape[0], 
 Xt_tiled = np.tile(Xtrain, [num_predict_samples, 1])
 
 # Plotting results
-fig = plt.figure(figsize=(16, 10))
-ax = []
-for i in range(1, 10):
-    if i > 4:
-        ax.append(fig.add_subplot(3, 3, i))
-        continue
-    ax.append(fig.add_subplot(3, 3, i, projection='3d'))
+fig_3d, fig = plt.figure(figsize=(14, 8)), plt.figure(figsize=(14, 8))
+ax_3d, ax = [], []
+for i in range(1, 5):
+    ax_3d.append(fig_3d.add_subplot(2, 2, i, projection='3d'))
 
-ax[0].scatter(Xtrain[:, 0], Xtrain[:, 1], Ytrain, s=1)
-ax[0].set_title("Raw Data")
-ax[0].set_xlabel('x1')
-ax[0].set_ylabel('x2')
-ax[0].set_zlabel('y')
-ax[0].grid()
+for i in range(1, 6):
+    ax.append(fig.add_subplot(2, 3, i))
 
-ax[1].scatter(Xt_tiled[:, 0:1], Xt_tiled[:, 1:2], samples_y_stack.flatten(), marker='+', alpha=0.01,
-              color=mcolors.TABLEAU_COLORS['tab:red'])
-ax[1].scatter(Xt_tiled[:, 0:1], Xt_tiled[:, 1:2], samples_f_stack.flatten(), marker='+', alpha=0.01,
-              color=mcolors.TABLEAU_COLORS['tab:blue'])
-ax[1].scatter(Xtrain[:, 0], Xtrain[:, 1], Ytrain, marker='x', color='black', alpha=0.1)
-ax[1].set_title("Mixture of GPs")
-ax[1].set_xlabel('x1')
-ax[1].set_ylabel('x2')
-ax[1].set_zlabel('y')
-ax[1].set_ylim(1.2 * min(Ytrain), 1.2 * max(Ytrain))
-ax[1].grid()
+ax_3d[0].scatter(Xtrain[:, 0], Xtrain[:, 1], Ytrain, s=1)
+ax_3d[0].set_title("Raw Data")
+ax_3d[0].set_xlabel('x1')
+ax_3d[0].set_ylabel('x2')
+ax_3d[0].set_zlabel('y')
+ax_3d[0].grid()
+
+ax_3d[1].scatter(Xt_tiled[:, 0:1], Xt_tiled[:, 1:2], samples_y_stack.flatten(), marker='+', alpha=0.01,
+                 color=mcolors.TABLEAU_COLORS['tab:red'])
+ax_3d[1].scatter(Xt_tiled[:, 0:1], Xt_tiled[:, 1:2], samples_f_stack.flatten(), marker='+', alpha=0.01,
+                 color=mcolors.TABLEAU_COLORS['tab:blue'])
+ax_3d[1].scatter(Xtrain[:, 0], Xtrain[:, 1], Ytrain, marker='x', color='black', alpha=0.1)
+ax_3d[1].set_title("Mixture of GPs")
+ax_3d[1].set_xlabel('x1')
+ax_3d[1].set_ylabel('x2')
+ax_3d[1].set_zlabel('y')
+ax_3d[1].set_ylim(1.2 * min(Ytrain), 1.2 * max(Ytrain))
+ax_3d[1].grid()
 
 assign_ = model.predict_assign(Xtrain)
 for i in range(K):
-    ax[2].scatter(Xtrain[:, 0], Xtrain[:, 1], assign_[:, i], color=colors[i], s=1)
-ax[2].set_title("Assignment Plot")
-ax[2].set_xlabel('x1')
-ax[2].set_ylabel('x2')
-ax[2].set_zlabel('y')
-ax[2].grid()
+    ax_3d[2].scatter(Xtrain[:, 0], Xtrain[:, 1], assign_[:, i], color=colors[i], s=1)
+ax_3d[2].set_title("Assignment Plot")
+ax_3d[2].set_xlabel('x1')
+ax_3d[2].set_ylabel('x2')
+ax_3d[2].set_zlabel('y')
+ax_3d[2].grid()
 
 fmean, _ = model.predict_y(Xtrain)
 fmean_ = np.mean(fmean, 0)
 for i in range(K):
-    ax[3].scatter(Xtrain[:, 0], Xtrain[:, 1], fmean_[:, i], color=colors[i], s=1)
-ax[3].set_title("Prediction Plot")
-ax[3].set_xlabel('x1')
-ax[3].set_ylabel('x2')
-ax[3].set_zlabel('y')
-ax[3].grid()
+    ax_3d[3].scatter(Xtrain[:, 0], Xtrain[:, 1], fmean_[:, i], color=colors[i], s=1)
+ax_3d[3].set_title("Prediction Plot")
+ax_3d[3].set_xlabel('x1')
+ax_3d[3].set_ylabel('x2')
+ax_3d[3].set_zlabel('y')
+ax_3d[3].grid()
 
-ax[4].plot(iters, elbos, 'o-', ms=8, alpha=0.5)
-ax[4].set_xlabel('Iterations')
-ax[4].set_ylabel('ELBO')
-ax[4].grid()
+ax[0].plot(iters, elbos, 'o-', ms=8, alpha=0.5)
+ax[0].set_xlabel('Iterations')
+ax[0].set_ylabel('ELBO')
+ax[0].grid()
 
-stumpsX_const_value = 0.0
-stumpsY_const_value = 0.0
+stumpsX_const_value = 0
+stumpsY_const_value = 0
 
 Xtest_stumpsX = np.c_[Xtest[:, 0], stumpsY_const_value * np.ones(len(Xtest[:, 0]))]
 Xtest_stumpsY = np.c_[stumpsX_const_value * np.ones(len(Xtest[:, 1])), Xtest[:, 1]]
@@ -137,24 +137,24 @@ Xtests = [Xtest_stumpsX, Xtest_stumpsY]
 
 for i in range(2):
     if i == 0:
-        ax[i + 5].set_title("x2 Constant Value = " + str(stumpsY_const_value))
-        ax[i + 5].set_xlabel('x1')
+        ax[i + 1].set_title("x2 Constant Value = " + str(stumpsY_const_value))
+        ax[i + 1].set_xlabel('x1')
     elif i == 1:
-        ax[i + 5].set_title("x1 Constant Value = " + str(stumpsX_const_value))
-        ax[i + 5].set_xlabel('x2')
+        ax[i + 1].set_title("x1 Constant Value = " + str(stumpsX_const_value))
+        ax[i + 1].set_xlabel('x2')
 
     assign_ = model.predict_assign(Xtests[i])
-    ax[i + 5].plot(Xtests[i][:, i], assign_, 'o', markersize=1)
-    ax[i + 5].set_ylabel('softmax(assignment)')
-    ax[i + 5].grid()
+    ax[i + 1].plot(Xtests[i][:, i], assign_, 'o', markersize=1)
+    ax[i + 1].set_ylabel('softmax(assignment)')
+    ax[i + 1].grid()
 
 for i in range(2):
     if i == 0:
-        ax[i + 7].set_title("x2 Constant Value = " + str(stumpsY_const_value))
-        ax[i + 7].set_xlabel('x1')
+        ax[i + 3].set_title("x2 Constant Value = " + str(stumpsY_const_value))
+        ax[i + 3].set_xlabel('x1')
     elif i == 1:
-        ax[i + 7].set_title("x1 Constant Value = " + str(stumpsX_const_value))
-        ax[i + 7].set_xlabel('x2')
+        ax[i + 3].set_title("x1 Constant Value = " + str(stumpsX_const_value))
+        ax[i + 3].set_xlabel('x2')
 
     fmean, fvar = model.predict_y(Xtests[i])
     fmean_, fvar_ = np.mean(fmean, 0), np.mean(fvar, 0)
@@ -168,13 +168,14 @@ for i in range(2):
     lb, ub = (fmean_sorted - 2 * fvar_sorted ** 0.5), (fmean_sorted + 2 * fvar_sorted ** 0.5)
 
     for k in range(K):
-        ax[i + 7].plot(X_sorted[:, i], fmean_sorted[:, k], '-', alpha=1., color=colors[k])
-        ax[i + 7].fill_between(X_sorted[:, i], lb[:, k], ub[:, k], alpha=0.3, color=colors[k])
+        ax[i + 3].plot(X_sorted[:, i], fmean_sorted[:, k], '-', alpha=1., color=colors[k])
+        ax[i + 3].fill_between(X_sorted[:, i], lb[:, k], ub[:, k], alpha=0.3, color=colors[k])
 
-    ax[i + 7].scatter(Xtrain[:, i], Ytrain, marker='x', color='black', alpha=0.5)
-    ax[i + 7].set_ylabel('Pred. of GP experts')
-    ax[i + 7].grid()
+    ax[i + 3].scatter(Xtrain[:, i], Ytrain, marker='x', color='black', alpha=0.5)
+    ax[i + 3].set_ylabel('Pred. of GP experts')
+    ax[i + 3].grid()
 
 plt.tight_layout()
 plt.show()
-fig.savefig('../figs/demo_tf2_2d_modified_multiclass.png')
+fig_3d.savefig('../figs/demo_tf2_2d_modified_multiclass_1.png')
+fig.savefig('../figs/demo_tf2_2d_modified_multiclass_2.png')
