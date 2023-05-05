@@ -127,7 +127,7 @@ ax[0].set_xlabel('Iterations')
 ax[0].set_ylabel('ELBO')
 ax[0].grid()
 
-stumpsX_const_value = 0
+stumpsX_const_value = 0.2
 stumpsY_const_value = 0
 
 Xtest_stumpsX = np.c_[Xtest[:, 0], stumpsY_const_value * np.ones(len(Xtest[:, 0]))]
